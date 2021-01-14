@@ -1,0 +1,5 @@
+reinda::assets! {
+
+}
+
+fn main() {}

@@ -1,0 +1,20 @@
+[package]
+name = "reinda-macros"
+version = "0.1.0"
+authors = ["Lukas Kalbertodt <lukas.kalbertodt@gmail.com>"]
+edition = "2018"
+
+[lib]
+proc-macro = true
+
+
+[dependencies]
+reinda-core = { path = "../reinda-core" }
+proc-macro2 = "1"
+quote = "1"
+
+[dependencies.syn]
+version = "1"
+default-features = false
+# TODO: remove extra-traits
+features = ["parsing", "proc-macro", "clone-impls", "extra-traits"]
