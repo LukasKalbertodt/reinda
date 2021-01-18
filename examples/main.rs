@@ -1,4 +1,4 @@
-reinda::assets! {
+const ASSETS: reinda::Setup  = reinda::assets! {
     serve: {
         "index.html": { template },
         "bundle.js": {
@@ -13,6 +13,8 @@ reinda::assets! {
     includes: {
         "fonts.css": { template },
     },
-}
+};
 
-fn main() {}
+fn main() {
+    println!("{:#?}", ASSETS);
+}

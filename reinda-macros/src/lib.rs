@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use proc_macro::TokenStream as TokenStream1;
-use proc_macro2::TokenStream;
+use proc_macro::{TokenStream as TokenStream1};
+use proc_macro2::{Literal, TokenStream};
 use quote::quote;
 
 mod parse;
@@ -17,9 +17,54 @@ pub fn assets(input: TokenStream1) -> TokenStream1 {
 
 fn run(input: TokenStream) -> Result<TokenStream, syn::Error> {
     let input = syn::parse2::<Input>(input)?;
-    println!("{:#?}", input);
+    // println!("{:#?}", input);
 
-    Ok(quote! { const FOO: u32 = 3; })
+    let mut match_arms = Vec::new();
+    let mut asset_defs = Vec::new();
+
+    for (path, asset) in input.serve {
+        let idx = match_arms.len();
+        match_arms.push(quote! {
+            #path => Some(#idx),
+        });
+
+        let hash = asset.hash;
+        let template = asset.mods.template;
+        let append = match asset.mods.append {
+            Some(s) => quote! { Some(#s) },
+            None => quote! { None },
+        };
+        let prepend = match asset.mods.prepend {
+            Some(s) => quote! { Some(#s) },
+            None => quote! { None },
+        };
+        let content_field = match cfg!(debug_assertions) {
+            true => quote! {},
+            false => quote! { content: include_bytes!(#path) },
+        };
+
+        asset_defs.push(quote! {
+            reinda::AssetDef {
+                path: #path,
+                serve: true,
+                hash: #hash,
+                template: #template,
+                append: #append,
+                prepend: #prepend,
+                #content_field
+            }
+        });
+    }
+
+    Ok(quote! { reinda::Setup {
+        assets: &[#( #asset_defs ,)*],
+        path_to_idx: |s: &str| -> Option<usize> {
+            match s {
+                #( #match_arms )*
+                _ => None,
+            }
+        },
+    } })
 }
 
 #[derive(Debug)]
