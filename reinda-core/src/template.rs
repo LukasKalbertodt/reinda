@@ -1,4 +1,4 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, ops::Range};
 
 
 
@@ -47,11 +47,42 @@ impl Appender<'_> {
 /// within the fragment.
 pub fn render<R>(input: &str, mut replacer: R) -> Cow<'_, str>
 where
-    R: FnMut(&str, Appender)
+    R: FnMut(&str, Appender),
 {
     let mut out = String::new();
     let mut last_fragment_end = 0;
 
+    visit_fragment_spans(input, |span| {
+        out.push_str(&input[last_fragment_end..span.start - FRAGMENT_START.len()]);
+        replacer(input[span.clone()].trim(), Appender(&mut out));
+        last_fragment_end = span.end +  FRAGMENT_END.len();
+    });
+
+    if last_fragment_end != 0 {
+        out.push_str(&input[last_fragment_end..]);
+        Cow::Owned(out)
+    } else {
+        Cow::Borrowed(input)
+    }
+}
+
+/// Calls `visit` for all template fragments in `input`, in order.
+///
+/// The span (`Range<usize>`) of the fragment is passed to `visit`. The span
+/// excludes the fragment start and end token, but includes potential excess
+/// whitespace. Example:
+///
+/// ```text
+/// input:    "a{{: kk  :}}b"
+/// indices:   0123456789012
+/// ```
+///
+/// For that input, `visit` would be called once with `5..8` (`input[5..8]` is
+/// `"kk "`).
+pub fn visit_fragment_spans<V>(input: &str, mut visit: V)
+where
+    V: FnMut(Range<usize>),
+{
     let mut idx = 0;
     while let Some(pos) = input[idx..].find(FRAGMENT_START) {
         // We have a fragment candidate. Now we need to make sure that it's
@@ -71,22 +102,11 @@ where
             // This is a real fragment and we will now substitute.
             Some(end_pos) => {
                 let start = idx + pos;
-                out.push_str(&input[last_fragment_end..start]);
+                visit(start + FRAGMENT_START.len()..start + end_pos);
 
-                let inner = &input[start + FRAGMENT_START.len()..start + end_pos];
-                replacer(inner.trim(), Appender(&mut out));
-
-                last_fragment_end = start + end_pos + FRAGMENT_END.len();
-                idx = last_fragment_end;
+                idx = start + end_pos + FRAGMENT_END.len();
             }
         }
-    }
-
-    if last_fragment_end != 0 {
-        out.push_str(&input[last_fragment_end..]);
-        Cow::Owned(out)
-    } else {
-        Cow::Borrowed(input)
     }
 }
 
