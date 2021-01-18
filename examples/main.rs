@@ -1,3 +1,5 @@
+use reinda::{Assets, Config};
+
 const ASSETS: reinda::Setup  = reinda::assets! {
     #![base_path = "examples/assets"]
 
@@ -11,6 +13,23 @@ const ASSETS: reinda::Setup  = reinda::assets! {
     "style.css": { template, serve: false },
 };
 
-fn main() {
-    println!("{:#?}", ASSETS);
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let assets = Assets::new(ASSETS, Config::default()).await?;
+
+    for path in ASSETS.assets.iter().map(|a| a.path) {
+        println!("### {}", path);
+
+        match assets.load_raw(path).await? {
+            None => println!("doesn't exist"),
+            Some(raw) => {
+                println!("{:?}", raw.unresolved_fragments);
+                println!("--------------\n{}-----------", String::from_utf8_lossy(&raw.content));
+            }
+        }
+
+        println!();
+    }
+
+    Ok(())
 }

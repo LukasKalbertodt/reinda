@@ -56,8 +56,10 @@ fn run(input: TokenStream) -> Result<TokenStream, syn::Error> {
         });
     }
 
+    let base_path = &input.base_path;
     Ok(quote! {
         reinda::Setup {
+            base_path: #base_path,
             assets: &[#( #asset_defs ,)*],
             path_to_idx: |s: &str| -> Option<usize> {
                 match s {

@@ -4,9 +4,11 @@ pub mod template;
 
 
 
+#[derive(Clone, Copy)]
 pub struct Setup {
     pub assets: &'static [AssetDef],
     pub path_to_idx: fn(&str) -> Option<usize>,
+    pub base_path: &'static str,
 }
 
 impl fmt::Debug for Setup {
@@ -26,7 +28,7 @@ impl fmt::Debug for Setup {
 }
 
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct AssetDef {
     pub path: &'static str,
 
