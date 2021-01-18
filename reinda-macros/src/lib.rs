@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use proc_macro::{TokenStream as TokenStream1};
-use proc_macro2::{Literal, TokenStream};
+use proc_macro::TokenStream as TokenStream1;
+use proc_macro2::TokenStream;
 use quote::quote;
 
 mod parse;
@@ -17,24 +17,24 @@ pub fn assets(input: TokenStream1) -> TokenStream1 {
 
 fn run(input: TokenStream) -> Result<TokenStream, syn::Error> {
     let input = syn::parse2::<Input>(input)?;
-    // println!("{:#?}", input);
 
     let mut match_arms = Vec::new();
     let mut asset_defs = Vec::new();
 
-    for (path, asset) in input.serve {
+    for (path, asset) in input.assets {
         let idx = match_arms.len();
         match_arms.push(quote! {
             #path => Some(#idx),
         });
 
         let hash = asset.hash;
-        let template = asset.mods.template;
-        let append = match asset.mods.append {
+        let serve = asset.serve;
+        let template = asset.template;
+        let append = match asset.append {
             Some(s) => quote! { Some(#s) },
             None => quote! { None },
         };
-        let prepend = match asset.mods.prepend {
+        let prepend = match asset.prepend {
             Some(s) => quote! { Some(#s) },
             None => quote! { None },
         };
@@ -46,7 +46,7 @@ fn run(input: TokenStream) -> Result<TokenStream, syn::Error> {
         asset_defs.push(quote! {
             reinda::AssetDef {
                 path: #path,
-                serve: true,
+                serve: #serve,
                 hash: #hash,
                 template: #template,
                 append: #append,
@@ -56,61 +56,38 @@ fn run(input: TokenStream) -> Result<TokenStream, syn::Error> {
         });
     }
 
-    Ok(quote! { reinda::Setup {
-        assets: &[#( #asset_defs ,)*],
-        path_to_idx: |s: &str| -> Option<usize> {
-            match s {
-                #( #match_arms )*
-                _ => None,
-            }
-        },
-    } })
+    Ok(quote! {
+        reinda::Setup {
+            assets: &[#( #asset_defs ,)*],
+            path_to_idx: |s: &str| -> Option<usize> {
+                match s {
+                    #( #match_arms )*
+                    _ => None,
+                }
+            },
+        }
+    })
 }
 
 #[derive(Debug)]
 struct Input {
-    serve: HashMap<String, ServedAsset>,
-    includes: HashMap<String, IncludedAsset>,
+    assets: HashMap<String, Asset>,
 }
 
 #[derive(Debug)]
-struct ServedAsset {
+struct Asset {
     hash: bool,
-    mods: Modifications,
-}
-
-#[derive(Debug)]
-struct IncludedAsset {
-    mods: Modifications,
-}
-
-#[derive(Debug)]
-struct Modifications {
+    serve: bool,
     template: bool,
     append: Option<String>,
     prepend: Option<String>,
 }
 
-impl Default for ServedAsset {
+impl Default for Asset {
     fn default() -> Self {
         Self {
             hash: false,
-            mods: Modifications::default(),
-        }
-    }
-}
-
-impl Default for IncludedAsset {
-    fn default() -> Self {
-        Self {
-            mods: Modifications::default(),
-        }
-    }
-}
-
-impl Default for Modifications {
-    fn default() -> Self {
-        Self {
+            serve: true,
             template: false,
             append: None,
             prepend: None,
