@@ -1,10 +1,10 @@
 use std::fmt;
 
 pub mod template;
+
+
+
 pub struct Setup {
-    // raw_files: &'static [&'static u8],
-    // served_assets: ,
-    // includes:
     pub assets: &'static [AssetDef],
     pub path_to_idx: fn(&str) -> Option<usize>,
 }
