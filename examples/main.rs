@@ -1,12 +1,14 @@
 const ASSETS: reinda::Setup  = reinda::assets! {
-    "assets/index.html": { template },
-    "assets/bundle.js": {
+    #![base_path = "examples/assets"]
+
+    "index.html": { template },
+    "bundle.js": {
         hash,
         append: "//# sourceMappingURL={{: path:bundle.js.map :}}",
     },
-    "assets/bundle.js.map": { hash },
+    "bundle.js.map": { hash },
 
-    "assets/style.css": { template, serve: false },
+    "style.css": { template, serve: false },
 };
 
 fn main() {

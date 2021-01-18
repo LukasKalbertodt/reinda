@@ -17,4 +17,4 @@ quote = "1"
 version = "1"
 default-features = false
 # TODO: remove extra-traits
-features = ["parsing", "proc-macro", "clone-impls", "extra-traits"]
+features = ["parsing", "proc-macro", "clone-impls", "extra-traits", "derive", "printing"]

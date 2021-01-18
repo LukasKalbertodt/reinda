@@ -38,9 +38,11 @@ fn run(input: TokenStream) -> Result<TokenStream, syn::Error> {
             Some(s) => quote! { Some(#s) },
             None => quote! { None },
         };
-        let content_field = match cfg!(debug_assertions) {
-            true => quote! {},
-            false => quote! { content: include_bytes!(#path) },
+        let content_field = if cfg!(debug_assertions) {
+            quote! {}
+        } else {
+            let full_path = resolve_path(&input.base_path, &path);
+            quote! { content: include_bytes!(#full_path) }
         };
 
         asset_defs.push(quote! {
@@ -71,6 +73,7 @@ fn run(input: TokenStream) -> Result<TokenStream, syn::Error> {
 
 #[derive(Debug)]
 struct Input {
+    base_path: Option<String>,
     assets: HashMap<String, Asset>,
 }
 
@@ -92,5 +95,16 @@ impl Default for Asset {
             append: None,
             prepend: None,
         }
+    }
+}
+
+fn resolve_path(base: &Option<String>, path: &str) -> String {
+    match base {
+        Some(base) => {
+            let manifest = std::env::var("CARGO_MANIFEST_DIR")
+                .expect("CARGO_MANIFEST_DIR not set");
+            format!("{}/{}/{}", manifest, base, &path)
+        },
+        None => path.to_string(),
     }
 }
