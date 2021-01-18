@@ -1,15 +1,12 @@
 const ASSETS: reinda::Setup  = reinda::assets! {
-    "index.html": { template },
-    "bundle.js": {
+    "assets/index.html": { template },
+    "assets/bundle.js": {
         hash,
         append: "//# sourceMappingURL={{: path:bundle.js.map :}}",
     },
-    "bundle.js.map": { hash },
+    "assets/bundle.js.map": { hash },
 
-    "fonts/cyrillic-400.woff2": { hash },
-    "fonts/cyrillic-700.woff2": { hash },
-
-    "fonts.css": { template, serve: false },
+    "assets/style.css": { template, serve: false },
 };
 
 fn main() {
