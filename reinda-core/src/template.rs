@@ -2,20 +2,20 @@ use std::{borrow::Cow, ops::Range};
 
 
 
-const FRAGMENT_START: &str = "{{: ";
-const FRAGMENT_END: &str = " :}}";
+const FRAGMENT_START: &[u8] = b"{{: ";
+const FRAGMENT_END: &[u8] = b" :}}";
 
 /// Fragments longer than this are ignored. This is just to protect against
 /// random fragment start/end markers in large generated files.
 const MAX_FRAGMENT_LEN: usize = 256;
 
 
-/// A string that you can append to. Used for `render`.
-pub struct Appender<'a>(&'a mut String);
+/// A byte string that you can append to. Used for `render`.
+pub struct Appender<'a>(&'a mut Vec<u8>);
 
 impl Appender<'_> {
-    pub fn append(&mut self, s: &str) {
-        self.0.push_str(s);
+    pub fn append(&mut self, s: &[u8]) {
+        self.0.extend_from_slice(s);
     }
 }
 
@@ -45,21 +45,21 @@ impl Appender<'_> {
 ///
 /// As you can see, excess whitespace is stripped before passing the string
 /// within the fragment.
-pub fn render<R>(input: &str, mut replacer: R) -> Cow<'_, str>
+pub fn render<R>(input: &[u8], mut replacer: R) -> Cow<'_, [u8]>
 where
-    R: FnMut(&str, Appender),
+    R: FnMut(&[u8], Appender),
 {
-    let mut out = String::new();
+    let mut out = Vec::new();
     let mut last_fragment_end = 0;
 
     visit_fragment_spans(input, |span| {
-        out.push_str(&input[last_fragment_end..span.start - FRAGMENT_START.len()]);
-        replacer(input[span.clone()].trim(), Appender(&mut out));
+        out.extend_from_slice(&input[last_fragment_end..span.start - FRAGMENT_START.len()]);
+        replacer(&input[span.clone()], Appender(&mut out));
         last_fragment_end = span.end +  FRAGMENT_END.len();
     });
 
     if last_fragment_end != 0 {
-        out.push_str(&input[last_fragment_end..]);
+        out.extend_from_slice(&input[last_fragment_end..]);
         Cow::Owned(out)
     } else {
         Cow::Borrowed(input)
@@ -73,27 +73,26 @@ where
 /// whitespace. Example:
 ///
 /// ```text
-/// input:    "a{{: kk  :}}b"
-/// indices:   0123456789012
+/// input:    b"a{{: kk   :}}b"
+/// indices:    0123456789012
 /// ```
 ///
-/// For that input, `visit` would be called once with `5..8` (`input[5..8]` is
-/// `"kk "`).
-pub fn visit_fragment_spans<V>(input: &str, mut visit: V)
+/// For that input, `visit` would be called once with `5..9` (`input[5..9]` is
+/// `"kk  "`).
+// TODO: maybe let visitor return "break"
+pub fn visit_fragment_spans<V>(input: &[u8], mut visit: V)
 where
     V: FnMut(Range<usize>),
 {
     let mut idx = 0;
-    while let Some(pos) = input[idx..].find(FRAGMENT_START) {
+    while let Some(pos) = find(&input[idx..], FRAGMENT_START) {
         // We have a fragment candidate. Now we need to make sure that it's
         // actually a valid fragment.
         let end_pos = input[idx + pos..]
-            .lines()
-            .next()
-            .and_then(|l| {
-                let end = std::cmp::min(l.len(), MAX_FRAGMENT_LEN);
-                l[..end].find(FRAGMENT_END)
-            });
+            .windows(FRAGMENT_END.len())
+            .take(MAX_FRAGMENT_LEN - FRAGMENT_END.len() + 1)
+            .take_while(|win| win[0] != b'\n')
+            .position(|win| win == FRAGMENT_END);
 
         match end_pos {
             // We haven't found a matching end marker: ignore this start marker.
@@ -110,6 +109,10 @@ where
     }
 }
 
+fn find(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    haystack.windows(needle.len()).position(|win| win == needle)
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -117,7 +120,7 @@ mod tests {
 
     #[test]
     fn render_no_fragments() {
-        let s = "foo, bar, baz";
+        let s = b"foo, bar, baz" as &[u8];
         let res = render(s, |_, _| {});
         assert!(matches!(res, Cow::Borrowed(_)));
         assert_eq!(res, s);
@@ -125,36 +128,36 @@ mod tests {
 
     #[test]
     fn render_simple_fragments() {
-        let append_uppercase = |k: &str, mut a: Appender| a.append(&k.to_uppercase());
+        let append_uppercase = |k: &[u8], mut a: Appender| a.append(&k.to_ascii_uppercase());
 
         assert_eq!(
-            render("{{: banana :}}", append_uppercase),
-            "BANANA",
+            render(b"{{: banana :}}", append_uppercase),
+            b"BANANA" as &[u8],
         );
         assert_eq!(
-            render("foo {{: cat :}}baz", append_uppercase),
-            "foo CATbaz",
+            render(b"foo {{: cat :}}baz", append_uppercase),
+            b"foo CATbaz" as &[u8],
         );
         assert_eq!(
-            render("foo {{: cat :}}baz{{: dog :}}", append_uppercase),
-            "foo CATbazDOG",
+            render(b"foo {{: cat :}}baz{{: dog :}}", append_uppercase),
+            b"foo CATbazDOG" as &[u8],
         );
     }
 
     #[test]
     fn render_ignored_fragments() {
-        let append_uppercase = |k: &str, mut a: Appender| a.append(&k.to_uppercase());
+        let append_uppercase = |k: &[u8], mut a: Appender| a.append(&k.to_ascii_uppercase());
 
         assert_eq!(
-            render("x{{: a\nb :}}y", append_uppercase),
-            "x{{: a\nb :}}y",
+            render(b"x{{: a\nb :}}y", append_uppercase),
+            b"x{{: a\nb :}}y" as &[u8],
         );
         assert_eq!(
-            render("x{{: a\n {{: kiwi :}}y", append_uppercase),
-            "x{{: a\n KIWIy",
+            render(b"x{{: a\n {{: kiwi :}}y", append_uppercase),
+            b"x{{: a\n KIWIy" as &[u8],
         );
 
-        let long = "foo {:: \
+        let long = b"foo {:: \
             abcdefghijklmnopqrstuvwxyabcdefghijklmnopqrstuvwxy\
             abcdefghijklmnopqrstuvwxyabcdefghijklmnopqrstuvwxy\
             abcdefghijklmnopqrstuvwxyabcdefghijklmnopqrstuvwxy\
@@ -162,7 +165,7 @@ mod tests {
             abcdefghijklmnopqrstuvwxyabcdefghijklmnopqrstuvwxy\
             abcdefghijklmnopqrstuvwxyabcdefghijklmnopqrstuvwxy\
             yo ::} bar\
-        ";
+        " as &[u8];
         assert_eq!(render(long, append_uppercase), long);
     }
 }
