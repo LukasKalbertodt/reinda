@@ -20,12 +20,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     for path in ASSETS.assets.iter().map(|a| a.path) {
         println!("### {}", path);
 
-        match assets.load_raw(path).await? {
+        // match assets.load_raw(path).await? {
+        //     None => println!("doesn't exist"),
+        //     Some(raw) => {
+        //         println!("{:?}", raw.unresolved_fragments);
+        //         println!("--------------\n{}-----------", String::from_utf8_lossy(&raw.content));
+        //     }
+        // }
+
+        match assets.load_single(path).await? {
             None => println!("doesn't exist"),
-            Some(raw) => {
-                println!("{:?}", raw.unresolved_fragments);
-                println!("--------------\n{}-----------", String::from_utf8_lossy(&raw.content));
-            }
+            Some(bytes) => println!("{}", String::from_utf8_lossy(&bytes)),
         }
 
         println!();

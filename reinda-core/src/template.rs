@@ -45,24 +45,24 @@ impl Appender<'_> {
 ///
 /// As you can see, excess whitespace is stripped before passing the string
 /// within the fragment.
-pub fn render<R>(input: &[u8], mut replacer: R) -> Cow<'_, [u8]>
+pub fn render<R, E>(input: &[u8], mut replacer: R) -> Result<Cow<'_, [u8]>, E>
 where
-    R: FnMut(&[u8], Appender),
+    R: FnMut(&[u8], Appender) -> Result<(), E>,
 {
     let mut out = Vec::new();
     let mut last_fragment_end = 0;
 
     for span in FragmentSpans::new(input) {
         out.extend_from_slice(&input[last_fragment_end..span.start - FRAGMENT_START.len()]);
-        replacer(&input[span.clone()], Appender(&mut out));
+        replacer(&input[span.clone()], Appender(&mut out))?;
         last_fragment_end = span.end +  FRAGMENT_END.len();
     }
 
     if last_fragment_end != 0 {
         out.extend_from_slice(&input[last_fragment_end..]);
-        Cow::Owned(out)
+        Ok(Cow::Owned(out))
     } else {
-        Cow::Borrowed(input)
+        Ok(Cow::Borrowed(input))
     }
 }
 
