@@ -1,3 +1,5 @@
+use std::convert::TryInto;
+
 use proc_macro::TokenStream as TokenStream1;
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -20,9 +22,9 @@ fn run(input: TokenStream) -> Result<TokenStream, syn::Error> {
     let mut asset_defs = Vec::new();
 
     for (path, asset) in input.assets {
-        let idx = match_arms.len();
+        let idx: u32 = match_arms.len().try_into().expect("you have more than 2^32 assets?!");
         match_arms.push(quote! {
-            #path => Some(#idx),
+            #path => Some(reinda::AssetId(#idx)),
         });
 
         let hash = asset.hash;
@@ -61,12 +63,12 @@ fn run(input: TokenStream) -> Result<TokenStream, syn::Error> {
         reinda::Setup {
             base_path: #base_path,
             assets: &[#( #asset_defs ,)*],
-            path_to_idx: |s: &str| -> Option<usize> {
+            path_to_id: reinda::PathToIdMap(|s: &str| -> Option<reinda::AssetId> {
                 match s {
                     #( #match_arms )*
                     _ => None,
                 }
-            },
+            }),
         }
     })
 }

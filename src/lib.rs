@@ -1,9 +1,9 @@
-use std::{borrow::Cow, collections::HashMap, path::{Path, PathBuf}};
+use std::{borrow::Cow, collections::HashMap, path::PathBuf};
 use bytes::Bytes;
 
 use reinda_core::template;
 pub use reinda_macros::assets;
-pub use reinda_core::{AssetDef, Setup};
+pub use reinda_core::{AssetDef, AssetId, PathToIdMap, Setup};
 
 
 /// Runtime assets configuration.
@@ -38,6 +38,8 @@ impl Assets {
         let content = {
             #[cfg(debug_assertions)]
             {
+                use std::path::Path;
+
                 let base = self.config.base_path.as_deref()
                     .unwrap_or(Path::new(self.setup.base_path));
 
@@ -50,8 +52,8 @@ impl Assets {
 
             #[cfg(not(debug_assertions))]
             {
-                match (self.setup.path_to_idx)(path) {
-                    Some(idx) => Bytes::from_static(self.setup.assets[idx].content),
+                match self.setup.asset_by_path(path) {
+                    Some(asset) => Bytes::from_static(asset.content),
                     None => return Ok(None),
                 }
             }
@@ -71,7 +73,7 @@ impl Assets {
     pub async fn load_single(&self, start_path: &str) -> Result<Option<Bytes>, Error> {
         let mut resolver = Resolver::new();
 
-        let start_idx = match (self.setup.path_to_idx)(start_path) {
+        let start_idx = match self.setup.path_to_id(start_path) {
             None => return Ok(None),
             Some(idx) => idx,
         };
@@ -85,7 +87,7 @@ impl Assets {
                 return Err(Error::CyclicInclude(start_path.to_string()));
             }
 
-            let path = self.setup.assets[idx].path;
+            let path = self.setup[idx].path;
             let raw = match self.load_raw(path).await? {
                 None => return Ok(None),
                 Some(raw) => raw,
@@ -97,7 +99,7 @@ impl Assets {
                 for fragment in raw.unresolved_fragments {
                     match fragment {
                         Fragment::Include(import_path) => {
-                            if let Some(idx) = (self.setup.path_to_idx)(&import_path) {
+                            if let Some(idx) = self.setup.path_to_id(&import_path) {
                                 queue.push(idx);
                             } else {
                                 return Err(Error::UnresolvedImport {
@@ -124,12 +126,12 @@ impl Assets {
                 ResolvingAsset::Unresolved(template) => template,
             };
 
-            let path = self.setup.assets[idx].path;
+            let path = self.setup[idx].path;
             let resolved = template::render(&template, |inner, mut appender| -> Result<_, Error> {
                 match Fragment::from_bytes(inner, path)? {
                     Fragment::Path(p) => appender.append(p.as_bytes()),
                     Fragment::Include(path) => {
-                        let id = (self.setup.path_to_idx)(&path).unwrap(); // already checked above
+                        let id = self.setup.path_to_id(&path).unwrap(); // already checked above
                         let data = resolver.state[&id].unwrap_resolved();
                         appender.append(&data);
                     }
@@ -218,7 +220,7 @@ impl Fragment {
 }
 
 struct Resolver {
-    state: HashMap<usize, ResolvingAsset>,
+    state: HashMap<AssetId, ResolvingAsset>,
 }
 
 enum ResolvingAsset {
