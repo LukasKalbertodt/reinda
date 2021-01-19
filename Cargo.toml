@@ -6,6 +6,7 @@ edition = "2018"
 
 
 [dependencies]
+ahash = "0.6"
 reinda-core = { path = "reinda-core" }
 reinda-macros = { path = "reinda-macros" }
 bytes = "0.5"

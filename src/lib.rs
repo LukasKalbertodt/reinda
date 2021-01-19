@@ -1,9 +1,12 @@
-use std::{borrow::Cow, collections::HashMap, path::PathBuf};
+use std::{borrow::Cow, path::PathBuf};
 use bytes::Bytes;
+use ahash::AHashMap as HashMap;
 
 use reinda_core::template;
 pub use reinda_macros::assets;
 pub use reinda_core::{AssetDef, AssetId, PathToIdMap, Setup};
+
+mod include_graph;
 
 
 /// Runtime assets configuration.
