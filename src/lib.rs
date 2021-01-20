@@ -85,6 +85,8 @@ impl Assets {
     /// Loads an asset but does not attempt to render it as a template. Thus,
     /// the returned data might not be ready to be served yet.
     async fn load_raw(&self, path: &str) -> Result<Template, Error> {
+        let id = self.setup.path_to_id(path).expect("called `read_raw` with invalid path");
+
         let content = {
             #[cfg(debug_assertions)]
             {
@@ -98,14 +100,17 @@ impl Assets {
 
             #[cfg(not(debug_assertions))]
             {
-                let asset = self.setup.asset_by_path(path)
-                    .expect("called `read_raw` with invalid path");
+                let asset = self.setup[id];
                 Bytes::from_static(asset.content)
             }
         };
 
-        Template::parse(content)
-            .map_err(|err| Error::Template { err, file: path.into() })
+        if self.setup[id].template {
+            Template::parse(content)
+                .map_err(|err| Error::Template { err, file: path.into() })
+        } else {
+            Ok(Template::literal(content))
+        }
     }
 
     async fn load_dynamic(&self, start_path: &str) -> Result<Option<Bytes>, Error> {

@@ -103,6 +103,16 @@ impl Fragment {
 }
 
 impl Template {
+    /// Pretends `input` has no template fragments. This is a kind of strange
+    /// function which makes lots of other code easier as we can then also use
+    /// `Template` for assets that are not rendered as templates.
+    pub fn literal(input: Bytes) -> Self {
+        Self {
+            raw: input,
+            fragments: vec![],
+        }
+    }
+
     /// Parses the input byte string as template. Returns `Err` on parse error.
     pub fn parse(input: Bytes) -> Result<Self, Error> {
         let fragments = FragmentSpans::new(&input)
