@@ -1,6 +1,6 @@
-use std::{borrow::Cow, path::PathBuf};
+use std::{borrow::Cow, collections::HashMap, path::PathBuf};
 use bytes::Bytes;
-use ahash::AHashMap as HashMap;
+use ahash::AHashMap;
 
 use reinda_core::template;
 use crate::include_graph::IncludeGraph;
@@ -15,8 +15,8 @@ pub use reinda_core::{AssetDef, AssetId, PathToIdMap, Setup};
 /// Runtime assets configuration.
 #[derive(Debug, Clone, Default)]
 pub struct Config {
-    base_path: Option<PathBuf>,
-    variables: HashMap<String, String>,
+    pub base_path: Option<PathBuf>,
+    pub variables: HashMap<String, String>,
     // compression
 }
 
@@ -136,7 +136,7 @@ impl Assets {
     /// `resolver` are already loaded into the resolver, otherwise this method
     /// will panic! This implies that all include paths are valid and refer to
     /// assets in `self.setup`.
-    fn resolve(&self, resolver: Resolver) -> Result<HashMap<AssetId, Bytes>, Error> {
+    fn resolve(&self, resolver: Resolver) -> Result<AHashMap<AssetId, Bytes>, Error> {
         let Resolver { mut resolved, mut unresolved, graph } = resolver;
 
         // We sort the include graph topologically such that we never have to
@@ -170,9 +170,13 @@ impl Assets {
 
                         appender.append(&data);
                     }
-                    Fragment::Var(_) => {
-                        // TODO
-                        appender.append(b"TODO");
+                    Fragment::Var(key) => {
+                        let value = self.config.variables.get(&key)
+                            .ok_or_else(|| Error::MissingVariable {
+                                key: key.into(),
+                                file: path.into(),
+                            })?;
+                        appender.append(value.as_bytes());
                     }
                 }
 
@@ -213,6 +217,12 @@ pub enum Error {
         in_file: String,
         imported: String,
     },
+
+    #[error("variable '{key}' is used in '{file}', but that variable has not been defined")]
+    MissingVariable {
+        key: String,
+        file: String,
+    }
 }
 
 /// An asset that has been loaded but which might still need to be rendered as
@@ -265,16 +275,16 @@ impl Fragment {
 
 
 struct Resolver {
-    resolved: HashMap<AssetId, Bytes>,
-    unresolved: HashMap<AssetId, Bytes>,
+    resolved: AHashMap<AssetId, Bytes>,
+    unresolved: AHashMap<AssetId, Bytes>,
     graph: IncludeGraph,
 }
 
 impl Resolver {
     fn new() -> Self {
         Self {
-            resolved: HashMap::new(),
-            unresolved: HashMap::new(),
+            resolved: AHashMap::new(),
+            unresolved: AHashMap::new(),
             graph: IncludeGraph::new(),
         }
     }

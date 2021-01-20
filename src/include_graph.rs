@@ -1,20 +1,20 @@
 use std::collections::VecDeque;
-use ahash::{AHashMap as HashMap, AHashSet as HashSet};
+use ahash::{AHashMap, AHashSet};
 
 use reinda_core::AssetId;
 
 
-pub(crate) struct IncludeGraph(HashMap<AssetId, NodeData>);
+pub(crate) struct IncludeGraph(AHashMap<AssetId, NodeData>);
 
 #[derive(Default)]
 struct NodeData {
-    includes: HashSet<AssetId>,
-    included_by: HashSet<AssetId>,
+    includes: AHashSet<AssetId>,
+    included_by: AHashSet<AssetId>,
 }
 
 impl IncludeGraph {
     pub(crate) fn new() -> Self {
-        Self(HashMap::new())
+        Self(AHashMap::new())
     }
 
     pub(crate) fn add_include(&mut self, includer: AssetId, includee: AssetId) {

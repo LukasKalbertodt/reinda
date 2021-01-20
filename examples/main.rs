@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use reinda::{Assets, Config};
 
 const ASSETS: reinda::Setup  = reinda::assets! {
@@ -15,7 +17,13 @@ const ASSETS: reinda::Setup  = reinda::assets! {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let assets = Assets::new(ASSETS, Config::default()).await?;
+    let mut variables = HashMap::new();
+    variables.insert("name".into(), "peter".into());
+    let config = Config {
+        variables,
+        .. Config::default()
+    };
+    let assets = Assets::new(ASSETS, config).await?;
 
     for path in ASSETS.assets.iter().map(|a| a.path) {
         println!("### {}", path);
