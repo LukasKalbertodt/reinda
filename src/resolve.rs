@@ -71,7 +71,7 @@ impl Resolver {
             }
 
             // Load file contents and add it to the resolver
-            let path = setup[id].path;
+            let path = setup.def(id).path;
             let raw_bytes = load_raw_from_fs(path, setup, config).await?;
             resolver.add_raw(raw_bytes, id, &setup)?;
 
@@ -99,19 +99,19 @@ impl Resolver {
         // We sort the include graph topologically such that we never have to
         // deal with an unresolved include.
         let assets = graph.topological_sort().map_err(|cycle| {
-            let cycle = cycle.into_iter().map(|id| setup[id].path.to_string()).collect();
+            let cycle = cycle.into_iter().map(|id| setup.def(id).path.to_string()).collect();
             Error::CyclicInclude(cycle)
         })?;
 
-        for idx in assets {
-            let template = match unresolved.remove(&idx) {
-                // If `idx` is ont in `unresolved`, it is already resolved and
+        for id in assets {
+            let template = match unresolved.remove(&id) {
+                // If `id` is ont in `unresolved`, it is already resolved and
                 // we can skip it.
                 None => continue,
                 Some(template) => template,
             };
 
-            let path = setup[idx].path;
+            let path = setup.def(id).path;
             let rendered = template.render(|fragment, mut appender| -> Result<_, Error> {
                 match fragment {
                     Fragment::Path(p) => {
@@ -145,7 +145,7 @@ impl Resolver {
                 Ok(())
             })?;
 
-            resolved.insert(idx, rendered);
+            resolved.insert(id, rendered);
         }
 
         Ok(resolved)
@@ -157,7 +157,7 @@ impl Resolver {
         asset_id: AssetId,
         setup: &Setup,
     ) -> Result<(), Error> {
-        let raw_asset = RawAsset::new(raw_bytes, &setup[asset_id])?;
+        let raw_asset = RawAsset::new(raw_bytes, &setup.def(asset_id))?;
         match raw_asset.into_already_rendered() {
             Ok(resolved) => {
                 // If there are no unresolved fragments at all, this is already
@@ -170,7 +170,7 @@ impl Resolver {
                 for include_path in includes {
                     let includee_id = setup.path_to_id(&include_path)
                         .ok_or_else(|| Error::UnresolvedInclude {
-                            in_file: setup[asset_id].path.into(),
+                            in_file: setup.def(asset_id).path.into(),
                             included: include_path.into(),
                         })?;
 

@@ -15,7 +15,7 @@ pub use reinda_macros::assets;
 pub use reinda_core::{AssetDef, AssetId, PathToIdMap, Setup};
 
 
-/// Runtime assets configuration.
+/// Runtime configuration.
 #[derive(Debug, Clone, Default)]
 pub struct Config {
     /// The base path from which all assets are loaded. *Default*: `None`.
@@ -103,7 +103,7 @@ impl Assets {
 
         // If this point is reached, either the asset's path is not hashed or we
         // are in debug mode, where we never hash paths.
-        self.setup[id].path
+        self.setup.def(id).path
     }
 }
 
@@ -120,9 +120,9 @@ impl Assets {
     async fn new_impl(setup: Setup, config: Config) -> Result<Self, Error> {
         let resolver = Resolver::for_all_assets(&setup, &config).await?;
         // TODO: hashing
-        let resolved = resolver.resolve(&setup, &config, |id| setup[id].path)?;
+        let resolved = resolver.resolve(&setup, &config, |id| setup.def(id).path)?;
         let assets = resolved.into_iter()
-            .map(|(id, bytes)| (setup[id].path.into(), bytes))
+            .map(|(id, bytes)| (setup.def(id).path.into(), bytes))
             .collect();
 
         Ok(Self {
@@ -145,7 +145,7 @@ impl Assets {
         let setup = &self.setup;
         let config = &self.config;
         let resolver = Resolver::for_single_asset_from_fs(start_id, setup, config).await?;
-        let resolved = resolver.resolve(setup, config, |id| setup[id].path)?;
+        let resolved = resolver.resolve(setup, config, |id| setup.def(id).path)?;
         let out = {resolved}.remove(&start_id)
             .expect("resolver did not contain requested file");
 

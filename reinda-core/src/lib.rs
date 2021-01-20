@@ -1,13 +1,22 @@
-use std::{fmt, ops};
+use std::fmt;
 
 pub mod template;
 
 
-/// Structure that holds metadata and (in release mode) the included raw asset
-/// data.
+/// Simple ID to refer to one asset in a `Setup` or `Assets` struct.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct AssetId(pub u32);
+
+/// An opaque structure that holds metadata and (in prod mode) the included raw
+/// asset data.
 ///
-/// The fields of this struct are public such that it can be const-constructed,
-/// but you shouldn't really access the fields yourself.
+/// **Note**: the fields of this struct are public in order for it to be
+/// const-constructed in `assets!`. There are also a some public methods on this
+/// type for a similar reason. However, the fields and methods are not
+/// considered part of the public API of `reinda` and as such you shouldn't use
+/// them as they might change in minor version updates. Treat this type as
+/// opaque! (In case you were wondering, all those fields and methods have been
+/// hidden in the docs).
 #[derive(Debug, Clone, Copy)]
 pub struct Setup {
     #[doc(hidden)]
@@ -19,18 +28,18 @@ pub struct Setup {
 }
 
 impl Setup {
+    #[doc(hidden)]
     pub fn asset_by_path(&self, path: &str) -> Option<&AssetDef> {
-        self.path_to_id(path).map(|id| &self[id])
+        self.path_to_id(path).map(|id| self.def(id))
     }
 
+    #[doc(hidden)]
     pub fn path_to_id(&self, path: &str) -> Option<AssetId> {
         (self.path_to_id.0)(path)
     }
-}
 
-impl ops::Index<AssetId> for Setup {
-    type Output = AssetDef;
-    fn index(&self, id: AssetId) -> &AssetDef {
+    #[doc(hidden)]
+    pub fn def(&self, id: AssetId) -> &AssetDef {
         &self.assets[id.0 as usize]
     }
 }
@@ -60,7 +69,3 @@ pub struct AssetDef {
     #[cfg(not(debug_assertions))]
     pub content: &'static [u8],
 }
-
-/// Simple ID to refer to one asset in a `Setup` or `Assets` struct.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct AssetId(pub u32);
