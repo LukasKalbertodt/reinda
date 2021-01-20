@@ -1,4 +1,5 @@
-use std::{borrow::Cow, ops::Range};
+use std::ops::Range;
+use bytes::Bytes;
 
 
 
@@ -10,7 +11,7 @@ const FRAGMENT_END: &[u8] = b" :}}";
 const MAX_FRAGMENT_LEN: usize = 256;
 
 
-/// A byte string that you can append to. Used for `render`.
+/// A byte string that you can append to. Used for [`Template::render`].
 pub struct Appender<'a>(&'a mut Vec<u8>);
 
 impl Appender<'_> {
@@ -19,52 +20,169 @@ impl Appender<'_> {
     }
 }
 
-/// Renders the template `input`, using `replacer` to evaluate the fragments.
+/// A parsed template.
 ///
 /// # Template syntax
 ///
 /// Our template syntax is super simple and is really just a glorified
 /// search-and-replace. The input is checked for "fragments" which have the
 /// syntax `{{: foo :}}`. The start token is actually `{{: ` (note the
-/// whitespace!). So `{{:foo:}}` is not recognized as token.
+/// whitespace!). So `{{:foo:}}` is not recognized as fragment.
 ///
 /// There are two additional constraints: the fragment must not contain a
 /// newline and must be shorter than [`MAX_FRAGMENT_LEN`]. If these conditions
 /// are not met, the fragment start token is ignored.
 ///
-///
-/// # Replacing/evaluating fragments
-///
-/// For each fragment in the `input` template, the `replacer` is called with
-/// the string within the fragment. For example, the template string
-/// `foo {{: bar :}} baz {{: config.data   :}}x` would lead to two calls to
-/// `replacer`, with the following strings as first parameter:
-///
-/// - `bar`
-/// - `config.data`
-///
-/// As you can see, excess whitespace is stripped before passing the string
-/// within the fragment.
-pub fn render<R, E>(input: &[u8], mut replacer: R) -> Result<Cow<'_, [u8]>, E>
-where
-    R: FnMut(&[u8], Appender) -> Result<(), E>,
-{
-    let mut out = Vec::new();
-    let mut last_fragment_end = 0;
+/// The string between the start and end tag is then trimmed (excess whitespace
+/// removed) and parsed into a [`Fragment`]. See that type's documentation for
+/// information about the existing kinds of fragments.
+pub struct Template {
+    raw: Bytes,
+    fragments: Vec<SpannedFragment>,
+}
 
-    for span in FragmentSpans::new(input) {
-        out.extend_from_slice(&input[last_fragment_end..span.start - FRAGMENT_START.len()]);
-        replacer(&input[span.clone()], Appender(&mut out))?;
-        last_fragment_end = span.end +  FRAGMENT_END.len();
+/// Error returned by the parsing functions.
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("template fragment does not contain valid UTF8: {0:?}")]
+    NonUtf8TemplateFragment(Vec<u8>),
+    #[error("unknown template fragment specifier '{0}'")]
+    UnknownTemplateSpecifier(String),
+}
+
+/// A fragment with a span.
+struct SpannedFragment {
+    span: Range<usize>,
+    kind: Fragment,
+}
+
+/// A parsed template fragment.
+#[derive(Debug)]
+pub enum Fragment {
+    // TODO: one could avoid allocating those `String`s by storing `Byte`s
+    // instead. However, this would add more UTF8 checks and/or unsafe blocks.
+    // Not worth it for now.
+
+    /// Inserts the public path of another asset. Example:
+    /// `{{: path:bundle.js :}}`.
+    Path(String),
+
+    /// Includes another asset. Example: `{{: include:fonts.css :}}`.
+    Include(String),
+
+    /// Interpolates a runtime variable. Example: `{{: var:name :}}`.
+    Var(String),
+}
+
+impl Fragment {
+    fn parse(bytes: &[u8]) -> Result<Self, Error> {
+        let val = |s: &str| s[s.find(':').unwrap() + 1..].to_string();
+
+        let s = std::str::from_utf8(bytes)
+            .map_err(|_| Error::NonUtf8TemplateFragment(bytes.into()))?
+            .trim();
+
+        match () {
+            () if s.starts_with("path:") => Ok(Self::Path(val(s))),
+            () if s.starts_with("include:") => Ok(Self::Include(val(s))),
+            () if s.starts_with("var:") => Ok(Self::Var(val(s))),
+
+            _ => {
+                let specifier = s[..s.find(':').unwrap_or(s.len())].to_string();
+                Err(Error::UnknownTemplateSpecifier(specifier))
+            }
+        }
     }
 
-    if last_fragment_end != 0 {
-        out.extend_from_slice(&input[last_fragment_end..]);
-        Ok(Cow::Owned(out))
-    } else {
-        Ok(Cow::Borrowed(input))
+    pub fn as_include(&self) -> Option<&str> {
+        match self {
+            Self::Include(p) => Some(p),
+            _ => None,
+        }
     }
 }
+
+impl Template {
+    /// Parses the input byte string as template. Returns `Err` on parse error.
+    pub fn parse(input: Bytes) -> Result<Self, Error> {
+        let fragments = FragmentSpans::new(&input)
+            .map(|span| {
+                let kind = Fragment::parse(&input[span.clone()])?;
+                Ok(SpannedFragment { span, kind })
+            })
+            .collect::<Result<_, _>>()?;
+
+        Ok(Self {
+            raw: input,
+            fragments,
+        })
+    }
+
+    /// Returns `Some(out)` if this template does not have any fragments at all.
+    /// `out` is equal to the `input` that was passed to `parse`.
+    pub fn into_already_rendered(self) -> Result<Bytes, Self> {
+        if self.fragments.is_empty() {
+            Ok(self.raw)
+        } else {
+            Err(self)
+        }
+    }
+
+    /// Returns an iterator over all fragments.
+    pub fn fragments(&self) -> impl Iterator<Item = &Fragment> {
+        self.fragments.iter().map(|f| &f.kind)
+    }
+
+    /// Returns the raw input that was passed to `parse`.
+    pub fn raw_input(&self) -> &Bytes {
+        &self.raw
+    }
+
+    /// Renders the template using `replacer` to evaluate the fragments.
+    ///
+    /// # Replacing/evaluating fragments
+    ///
+    /// For each fragment in the `input` template, the `replacer` is called with
+    /// the parsed fragment. For example, the template string `foo {{: bar :}}
+    /// baz {{: config.data   :}}x` would lead to two calls to `replacer`, with
+    /// the following strings as first parameter:
+    ///
+    /// - `bar`
+    /// - `config.data`
+    ///
+    /// As you can see, excess whitespace is stripped before passing the string
+    /// within the fragment.
+    pub fn render<R, E>(self, mut replacer: R) -> Result<Bytes, E>
+    where
+        R: FnMut(Fragment, Appender) -> Result<(), E>,
+    {
+        if self.fragments.is_empty() {
+            return Ok(self.raw);
+        }
+
+        let mut out = Vec::new();
+        let mut last_fragment_end = 0;
+
+        for fragment in self.fragments {
+            // Add the part from the last fragment (or start) to the beginning
+            // of this fragment.
+            out.extend_from_slice(
+                &self.raw[last_fragment_end..fragment.span.start - FRAGMENT_START.len()]
+            );
+
+            // Evaluate the fragment.
+            replacer(fragment.kind, Appender(&mut out))?;
+
+            last_fragment_end = fragment.span.end +  FRAGMENT_END.len();
+        }
+
+        // Add the stuff after the last fragment.
+        out.extend_from_slice(&self.raw[last_fragment_end..]);
+
+        Ok(out.into())
+    }
+}
+
 
 /// An iterator over the spans of all template fragments in `input`, in order.
 ///
@@ -139,43 +257,62 @@ fn find(haystack: &[u8], needle: &[u8]) -> Option<usize> {
 mod tests {
     use super::*;
 
+    fn dummy_replacer(f: Fragment, mut appender: Appender) -> Result<(), ()> {
+        match f {
+            Fragment::Include(p) => {
+                appender.append(b"i-");
+                appender.append(p.to_uppercase().as_bytes());
+            }
+            Fragment::Path(p) => {
+                appender.append(b"p-");
+                appender.append(&p.bytes().rev().collect::<Vec<_>>())
+            }
+            Fragment::Var(k) => {
+                appender.append(b"v-");
+                appender.append(k.to_lowercase().as_bytes())
+            }
+        }
+
+        Ok(())
+    }
+
+    fn render(input: &[u8]) -> Bytes {
+        let template = Template::parse(Bytes::copy_from_slice(input)).expect("failed to parse");
+        template.render(dummy_replacer).unwrap()
+    }
+
     #[test]
     fn render_no_fragments() {
-        let s = b"foo, bar, baz" as &[u8];
-        let res = render(s, |_, _| {});
-        assert!(matches!(res, Cow::Borrowed(_)));
-        assert_eq!(res, s);
+        let s = b"foo, bar, baz";
+        let res = render(s);
+        assert_eq!(res, s as &[_]);
     }
 
     #[test]
     fn render_simple_fragments() {
-        let append_uppercase = |k: &[u8], mut a: Appender| a.append(&k.to_ascii_uppercase());
-
         assert_eq!(
-            render(b"{{: banana :}}", append_uppercase),
-            b"BANANA" as &[u8],
+            render(b"{{: include:banana :}}"),
+            b"i-BANANA" as &[u8],
         );
         assert_eq!(
-            render(b"foo {{: cat :}}baz", append_uppercase),
-            b"foo CATbaz" as &[u8],
+            render(b"foo {{: path:cat :}}baz"),
+            b"foo p-tacbaz" as &[u8],
         );
         assert_eq!(
-            render(b"foo {{: cat :}}baz{{: dog :}}", append_uppercase),
-            b"foo CATbazDOG" as &[u8],
+            render(b"foo {{: include:cat :}}baz{{: var:DOG :}}"),
+            b"foo i-CATbazv-dog" as &[u8],
         );
     }
 
     #[test]
     fn render_ignored_fragments() {
-        let append_uppercase = |k: &[u8], mut a: Appender| a.append(&k.to_ascii_uppercase());
-
-        // assert_eq!(
-        //     render(b"x{{: a\nb :}}y", append_uppercase),
-        //     b"x{{: a\nb :}}y" as &[u8],
-        // );
         assert_eq!(
-            render(b"x{{: a\n {{: kiwi :}}y", append_uppercase),
-            b"x{{: a\n KIWIy" as &[u8],
+            render(b"x{{: a\nb :}}y"),
+            b"x{{: a\nb :}}y" as &[u8],
+        );
+        assert_eq!(
+            render(b"x{{: a\n {{: include:kiwi :}}y"),
+            b"x{{: a\n i-KIWIy" as &[u8],
         );
 
         let long = b"foo {:: \
@@ -187,6 +324,6 @@ mod tests {
             abcdefghijklmnopqrstuvwxyabcdefghijklmnopqrstuvwxy\
             yo ::} bar\
         " as &[u8];
-        assert_eq!(render(long, append_uppercase), long);
+        assert_eq!(render(long), long);
     }
 }

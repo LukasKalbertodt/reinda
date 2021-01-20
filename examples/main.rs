@@ -36,7 +36,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         //     }
         // }
 
-        match assets.load_dynamic(path).await? {
+        match assets.get(path).await? {
             None => println!("doesn't exist"),
             Some(bytes) => println!("{}", String::from_utf8_lossy(&bytes)),
         }

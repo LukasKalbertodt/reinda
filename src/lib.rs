@@ -1,8 +1,8 @@
-use std::{borrow::Cow, collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, path::PathBuf};
 use bytes::Bytes;
 use ahash::AHashMap;
 
-use reinda_core::template;
+use reinda_core::template::{self, Fragment, Template};
 use crate::include_graph::IncludeGraph;
 
 mod include_graph;
@@ -84,7 +84,7 @@ impl Assets {
 
     /// Loads an asset but does not attempt to render it as a template. Thus,
     /// the returned data might not be ready to be served yet.
-    async fn load_raw(&self, path: &str) -> Result<RawAsset, Error> {
+    async fn load_raw(&self, path: &str) -> Result<Template, Error> {
         let content = {
             #[cfg(debug_assertions)]
             {
@@ -104,15 +104,8 @@ impl Assets {
             }
         };
 
-        let mut unresolved_fragments = Vec::new();
-        for span in template::FragmentSpans::new(&content) {
-            unresolved_fragments.push(Fragment::from_bytes(&content[span], path)?);
-        }
-
-        Ok(RawAsset {
-            content,
-            unresolved_fragments,
-        })
+        Template::parse(content)
+            .map_err(|err| Error::Template { err, file: path.into() })
     }
 
     async fn load_dynamic(&self, start_path: &str) -> Result<Option<Bytes>, Error> {
@@ -145,28 +138,29 @@ impl Assets {
             }
 
             let path = self.setup[id].path;
-            let raw = self.load_raw(path).await?;
+            let template = self.load_raw(path).await?;
 
-            if raw.unresolved_fragments.is_empty() {
-                // If there are no unresolved fragments at all, this is already
-                // ready.
-                resolver.resolved.insert(id, raw.content);
-            } else {
-                // If there are still some templat fragments in the file, we
-                // need to resolve this later.
-                resolver.unresolved.insert(id, raw.content);
+            match template.into_already_rendered() {
+                Ok(resolved) => {
+                    // If there are no unresolved fragments at all, this is
+                    // already ready.
+                    resolver.resolved.insert(id, resolved);
+                }
+                Err(template) => {
+                    // Add all included assets to the stack to recursively check.
+                    let includes = template.fragments().filter_map(|f| f.as_include());
+                    for include_path in includes {
+                        let includee_id = self.setup.path_to_id(&include_path)
+                            .ok_or_else(|| Error::UnresolvedInclude {
+                                in_file: path.into(),
+                                included: include_path.into(),
+                            })?;
 
-                // Add all included assets to the stack to recursively check.
-                let includes = raw.unresolved_fragments.into_iter().filter_map(|f| f.as_include());
-                for include_path in includes {
-                    let includee_id = self.setup.path_to_id(&include_path)
-                        .ok_or_else(|| Error::UnresolvedInclude {
-                            in_file: path.into(),
-                            included: include_path.into(),
-                        })?;
+                        resolver.graph.add_include(id, includee_id);
+                        stack.push(includee_id);
+                    }
 
-                    resolver.graph.add_include(id, includee_id);
-                    stack.push(includee_id);
+                    resolver.unresolved.insert(id, template);
                 }
             }
         }
@@ -199,8 +193,8 @@ impl Assets {
             };
 
             let path = self.setup[idx].path;
-            let resolved_template = template::render(&template, |inner, mut appender| -> Result<_, Error> {
-                match Fragment::from_bytes(inner, path)? {
+            let rendered = template.render(|fragment, mut appender| -> Result<_, Error> {
+                match fragment {
                     Fragment::Path(p) => {
                         let id = self.setup.path_to_id(&p)
                             .ok_or_else(|| Error::UnresolvedPath {
@@ -232,11 +226,7 @@ impl Assets {
                 Ok(())
             })?;
 
-            let bytes = match resolved_template {
-                Cow::Borrowed(_) => template.clone(),
-                Cow::Owned(v) => Bytes::from(v),
-            };
-            resolved.insert(idx, bytes);
+            resolved.insert(idx, rendered);
         }
 
         Ok(resolved)
@@ -249,13 +239,10 @@ pub enum Error {
     #[error("IO error")]
     Io(#[from] std::io::Error),
 
-    #[error("template fragment does not contain valid UTF8: {0:?}")]
-    NonUtf8TemplateFragment(Vec<u8>),
-
-    #[error("unknown template fragment specifier '{specifier}' in file '{path}'")]
-    UnknownTemplateSpecifier {
-        specifier: String,
-        path: String,
+    #[error("template error in '{file}': {err}")]
+    Template {
+        err: template::Error,
+        file: String,
     },
 
     #[error("cyclic include detected: {0:?}")]
@@ -281,58 +268,11 @@ pub enum Error {
     },
 }
 
-/// An asset that has been loaded but which might still need to be rendered as
-/// template.
-#[derive(Debug)]
-pub struct RawAsset {
-    pub content: Bytes,
-    pub unresolved_fragments: Vec<Fragment>,
-}
-
-/// A parsed fragment in the template.
-#[derive(Debug)]
-pub enum Fragment {
-    Path(String),
-    Include(String),
-    Var(String),
-}
-
-impl Fragment {
-    fn from_bytes(bytes: &[u8], path: &str) -> Result<Self, Error> {
-        let val = |s: &str| s[s.find(':').unwrap() + 1..].to_string();
-
-        let s = std::str::from_utf8(bytes)
-            .map_err(|_| Error::NonUtf8TemplateFragment(bytes.into()))?
-            .trim();
-
-        match () {
-            () if s.starts_with("path:") => Ok(Self::Path(val(s))),
-            () if s.starts_with("include:") => Ok(Self::Include(val(s))),
-            () if s.starts_with("var:") => Ok(Self::Var(val(s))),
-
-            _ => {
-                let specifier = s[..s.find(':').unwrap_or(s.len())].to_string();
-                Err(Error::UnknownTemplateSpecifier {
-                    specifier,
-                    path: path.to_string(),
-                })
-            }
-        }
-    }
-
-    fn as_include(self) -> Option<String> {
-        match self {
-            Self::Include(p) => Some(p),
-            _ => None,
-        }
-    }
-}
-
-
-
+/// State to resolve multiple asset templates with includes and other
+/// dependencies.
 struct Resolver {
     resolved: AHashMap<AssetId, Bytes>,
-    unresolved: AHashMap<AssetId, Bytes>,
+    unresolved: AHashMap<AssetId, Template>,
     graph: IncludeGraph,
 }
 
