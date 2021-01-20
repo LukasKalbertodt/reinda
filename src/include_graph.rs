@@ -17,9 +17,19 @@ impl IncludeGraph {
         Self(AHashMap::new())
     }
 
+    /// Adds one edge to this graph: `includer` includes `includee`.
     pub(crate) fn add_include(&mut self, includer: AssetId, includee: AssetId) {
         self.0.entry(includer).or_default().includes.insert(includee);
         self.0.entry(includee).or_default().included_by.insert(includer);
+    }
+
+    /// Returns an iterator over all assets included by `includer`.
+    #[cfg(debug_assertions)] // only used in dev-builds
+    pub(crate) fn includes_of(&self, includer: AssetId) -> impl '_ + Iterator<Item = AssetId> {
+        self.0.get(&includer)
+            .map(|data| data.includes.iter().copied())
+            .into_iter()
+            .flatten()
     }
 
     /// Returns a topological sorting of this include graph.
