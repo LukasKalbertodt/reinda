@@ -3,11 +3,14 @@ use bytes::Bytes;
 use ahash::AHashMap as HashMap;
 
 use reinda_core::template;
-pub use reinda_macros::assets;
-pub use reinda_core::{AssetDef, AssetId, PathToIdMap, Setup};
+use crate::include_graph::IncludeGraph;
 
 mod include_graph;
 
+
+
+pub use reinda_macros::assets;
+pub use reinda_core::{AssetDef, AssetId, PathToIdMap, Setup};
 
 /// Runtime assets configuration.
 #[derive(Debug, Clone, Default)]
@@ -37,7 +40,7 @@ impl Assets {
 
     /// Loads an asset but does not attempt to render it as a template. Thus,
     /// the returned data might not be ready to be served yet.
-    pub async fn load_raw(&self, path: &str) -> Result<Option<RawAsset>, Error> {
+    pub async fn load_raw(&self, path: &str) -> Result<RawAsset, Error> {
         let content = {
             #[cfg(debug_assertions)]
             {
@@ -46,19 +49,14 @@ impl Assets {
                 let base = self.config.base_path.as_deref()
                     .unwrap_or(Path::new(self.setup.base_path));
 
-                match tokio::fs::read(base.join(path)).await {
-                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-                    Err(e) => Err(e)?,
-                    Ok(content) => Bytes::from(content),
-                }
+                Bytes::from(tokio::fs::read(base.join(path)).await?)
             }
 
             #[cfg(not(debug_assertions))]
             {
-                match self.setup.asset_by_path(path) {
-                    Some(asset) => Bytes::from_static(asset.content),
-                    None => return Ok(None),
-                }
+                let asset = self.setup.asset_by_path(path)
+                    .expect("called `read_raw` with invalid path");
+                Bytes::from_static(asset.content)
             }
         };
 
@@ -67,15 +65,13 @@ impl Assets {
             unresolved_fragments.push(Fragment::from_bytes(&content[span], path)?);
         }
 
-        Ok(Some(RawAsset {
+        Ok(RawAsset {
             content,
             unresolved_fragments,
-        }))
+        })
     }
 
-    pub async fn load_single(&self, start_path: &str) -> Result<Option<Bytes>, Error> {
-        let mut resolver = Resolver::new();
-
+    pub async fn load_dynamic(&self, start_path: &str) -> Result<Option<Bytes>, Error> {
         let start_idx = match self.setup.path_to_id(start_path) {
             None => return Ok(None),
             Some(idx) => idx,
@@ -83,48 +79,53 @@ impl Assets {
 
         // Step 1: Load the raw content of the requested files and all files
         // recursively included by it.
-        let mut queue = vec![start_idx];
-        let mut queue_i = 0;
-        while let Some(&idx) = queue.get(queue_i) {
-            if resolver.state.contains_key(&idx) {
-                return Err(Error::CyclicInclude(start_path.to_string()));
+        let mut files = HashMap::new();
+        let mut graph = IncludeGraph::new();
+        let mut stack = vec![start_idx];
+        while let Some(idx) = stack.pop() {
+            // If we already loaded this file, skip it. Asset IDs might be added
+            // to the stack multiple times if they are included multiple times.
+            if files.contains_key(&idx) {
+                continue;
             }
 
             let path = self.setup[idx].path;
-            let raw = match self.load_raw(path).await? {
-                None => return Ok(None),
-                Some(raw) => raw,
-            };
+            let raw = self.load_raw(path).await?;
 
             if raw.unresolved_fragments.is_empty() {
-                resolver.state.insert(idx, ResolvingAsset::Resolved(raw.content));
+                // If there are no unresolved fragments at all, this is already
+                // ready.
+                files.insert(idx, ResolvingAsset::Resolved(raw.content));
             } else {
-                for fragment in raw.unresolved_fragments {
-                    match fragment {
-                        Fragment::Include(import_path) => {
-                            if let Some(idx) = self.setup.path_to_id(&import_path) {
-                                queue.push(idx);
-                            } else {
-                                return Err(Error::UnresolvedImport {
-                                    in_file: path.into(),
-                                    imported: import_path. into(),
-                                });
-                            }
-                        }
-                        _ => {} // TODO: hashing
-                    }
+                // If there are still some templat fragments in the file, we
+                // need to resolve this later.
+                files.insert(idx, ResolvingAsset::Unresolved(raw.content));
+
+                // Add all included assets to the stack to recursively check.
+                let includes = raw.unresolved_fragments.into_iter().filter_map(|f| f.as_include());
+                for import_path in includes {
+                    let includee_idx = self.setup.path_to_id(&import_path)
+                        .ok_or_else(|| Error::UnresolvedImport {
+                            in_file: path.into(),
+                            imported: import_path.into(),
+                        })?;
+
+                    graph.add_include(idx, includee_idx);
+                    stack.push(includee_idx);
                 }
-
-                resolver.state.insert(idx, ResolvingAsset::Unresolved(raw.content));
             }
-
-            queue_i += 1;
         }
 
-        // Step 2: Now iterate the queue backwards and actually render the
-        // templates. All the necessary data is already loaded now.
-        for &idx in queue.iter().rev() {
-            let template = match &resolver.state[&idx] {
+        // Step 2: Now actually render the templates. We render in the
+        // topological sort order such that we never have to deal with an
+        // unresolved include.
+        let assets = graph.topological_sort().map_err(|cycle| {
+            let cycle = cycle.into_iter().map(|id| self.setup[id].path.to_string()).collect();
+            Error::CyclicInclude(cycle)
+        })?;
+
+        for idx in assets {
+            let template = match &files[&idx] {
                 ResolvingAsset::Resolved(_) => continue,
                 ResolvingAsset::Unresolved(template) => template,
             };
@@ -135,7 +136,7 @@ impl Assets {
                     Fragment::Path(p) => appender.append(p.as_bytes()),
                     Fragment::Include(path) => {
                         let id = self.setup.path_to_id(&path).unwrap(); // already checked above
-                        let data = resolver.state[&id].unwrap_resolved();
+                        let data = files[&id].unwrap_resolved();
                         appender.append(&data);
                     }
                     Fragment::Var(_) => {
@@ -150,10 +151,10 @@ impl Assets {
                 Cow::Borrowed(_) => template.clone(),
                 Cow::Owned(v) => Bytes::from(v),
             };
-            *resolver.state.get_mut(&idx).unwrap() = ResolvingAsset::Resolved(bytes);
+            *files.get_mut(&idx).unwrap() = ResolvingAsset::Resolved(bytes);
         }
 
-        Ok(Some(resolver.state[&start_idx].unwrap_resolved().clone()))
+        Ok(Some(files[&start_idx].unwrap_resolved().clone()))
     }
 }
 
@@ -172,8 +173,8 @@ pub enum Error {
         path: String,
     },
 
-    #[error("cyclic include detected when starting with file {0}")]
-    CyclicInclude(String),
+    #[error("cyclic include detected: {0:?}")]
+    CyclicInclude(Vec<String>),
 
     #[error("unresolved import in '{in_file}': asset '{imported}' does not exist")]
     UnresolvedImport {
@@ -218,6 +219,13 @@ impl Fragment {
                     path: path.to_string(),
                 })
             }
+        }
+    }
+
+    fn as_include(self) -> Option<String> {
+        match self {
+            Self::Include(p) => Some(p),
+            _ => None,
         }
     }
 }

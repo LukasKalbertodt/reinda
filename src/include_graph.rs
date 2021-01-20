@@ -4,7 +4,7 @@ use ahash::{AHashMap as HashMap, AHashSet as HashSet};
 use reinda_core::AssetId;
 
 
-struct IncludeGraph(HashMap<AssetId, NodeData>);
+pub(crate) struct IncludeGraph(HashMap<AssetId, NodeData>);
 
 #[derive(Default)]
 struct NodeData {
