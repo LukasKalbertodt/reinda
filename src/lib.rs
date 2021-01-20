@@ -11,23 +11,36 @@ mod include_graph;
 mod resolve;
 
 
-
 pub use reinda_macros::assets;
 pub use reinda_core::{AssetDef, AssetId, PathToIdMap, Setup};
+
 
 /// Runtime assets configuration.
 #[derive(Debug, Clone, Default)]
 pub struct Config {
+    /// The base path from which all assets are loaded. *Default*: `None`.
+    ///
+    /// The per-asset paths you defined in the `asset!` invocation are prepended
+    /// by this path. This path can be absolute or relative. If this is not
+    /// defined, the base path set in `assets!` is used.
     pub base_path: Option<PathBuf>,
+
+    /// Key-value map for template variables. *Default*: empty.
+    ///
+    /// These can be inserted into assets via `{{: var:foo :}}`.
     pub variables: HashMap<String, String>,
-    // compression
 }
 
+/// A set of assets.
+///
+/// This is one of the two main entry points of this library. You create an
+/// instance of this type via [`Assets::new`] and then retrieve asset data via
+/// [`Assets::get`]. [The macro `assets!`][assets!] is the other main entry
+/// point of this library. It generates a `Setup` value at compile time which
+/// you have to pass to `Assets::new`.
 #[derive(Debug)]
 pub struct Assets {
     setup: Setup,
-
-    // TODO: maybe wrap into `RwLock` to make changable later.
     config: Config,
 
     /// Stores the hashed paths of assets. This contains entries for hashed
@@ -35,12 +48,16 @@ pub struct Assets {
     #[cfg(not(debug_assertions))]
     hashed_paths: AHashMap<AssetId, String>,
 
+    /// Stores the actual asset data. The key is the public path. So this is
+    /// basically the whole implementation of `Assets::get` in prod mode.
     #[cfg(not(debug_assertions))]
     assets: AHashMap<Box<str>, Bytes>,
 }
 
 
 impl Assets {
+    /// Creates a new instance of this type and, in prod mode, prepares all
+    /// assets.
     pub async fn new(setup: Setup, config: Config) -> Result<Self, Error> {
         Self::new_impl(setup, config).await
     }
@@ -49,16 +66,15 @@ impl Assets {
     ///
     /// The given path is the "public" path, as it is a part of the actual
     /// request URI. This doesn't mean this parameter has to be the full path
-    /// component from the request URI; you likely want to serve your assets
-    /// under a subdirectory, like `/assets/` which you would have to remove
-    /// from the URI-path before calling this method. However, for assets with
-    /// hashed filenames, this method expects the hashed path and not the one
-    /// you specified in `assets!`.
+    /// component from the request URI; you likely want to serve your assets in
+    /// a subdirectory, like `/assets/` which you would have to remove from the
+    /// URI-path before calling this method. However, for assets with hashed
+    /// filenames, this method expects the hashed path and not the one you
+    /// specified in [`assets!`].
     ///
     /// If no asset with the specified path exists, `Ok(None)` is returned. An
     /// error is returned in debug mode for a variety of reasons. In release
-    /// mode, this method always returns `Ok(_)`. TODO: change return type to
-    /// typedef error never.
+    /// mode, this method always returns `Ok(_)`. See [`GetError`].
     pub async fn get(&self, public_path: &str) -> Result<Option<Bytes>, GetError> {
         #[cfg(debug_assertions)]
         {
@@ -140,13 +156,15 @@ impl Assets {
 
 /// Error type for [`Assets::get`], which is different for dev and prod builds.
 ///
-/// In dev mode, all files are loaded from file system when you call `get`. This
-/// can lead to errors (i.e. IO errors), so `get` returns a `Result<_, Error>`.
-/// As such, in dev mode, this is just an alias for [`Error`].
+/// In dev mode, all required files are loaded from file system when you call
+/// `Assets::get`. This can lead to errors (e.g. IO errors), so `Assets::get`
+/// returns a `Result<_, Error>`. As such, in dev mode, `GetError` is just an
+/// alias for [`Error`].
 ///
 /// In prod mode however, all files are loaded and prepared in [`Assets::new`].
-/// The `get` method will never produce an error. Therefore, in prod mode, this
-/// is an alias to the never type, signaling that an error will never happen.
+/// The `Assets::get` method will never produce an error. Therefore, in prod
+/// mode, `GetError` is an alias to the never type, signaling that an error will
+/// never happen.
 #[cfg(debug_assertions)]
 pub type GetError = Error;
 
@@ -156,6 +174,7 @@ pub type GetError = std::convert::Infallible;
 
 /// All errors that might be returned by `reinda`.
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum Error {
     #[error("IO error")]
     Io(#[from] std::io::Error),

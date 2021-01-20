@@ -8,7 +8,7 @@ const FRAGMENT_END: &[u8] = b" :}}";
 
 /// Fragments longer than this are ignored. This is just to protect against
 /// random fragment start/end markers in large generated files.
-const MAX_FRAGMENT_LEN: usize = 256;
+pub const MAX_FRAGMENT_LEN: usize = 256;
 
 
 /// A byte string that you can append to. Used for [`Template::render`].

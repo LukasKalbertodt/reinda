@@ -10,8 +10,11 @@ pub mod template;
 /// but you shouldn't really access the fields yourself.
 #[derive(Debug, Clone, Copy)]
 pub struct Setup {
+    #[doc(hidden)]
     pub assets: &'static [AssetDef],
+    #[doc(hidden)]
     pub path_to_id: PathToIdMap,
+    #[doc(hidden)]
     pub base_path: &'static str,
 }
 
@@ -33,6 +36,7 @@ impl ops::Index<AssetId> for Setup {
 }
 
 #[derive(Clone, Copy)]
+#[doc(hidden)]
 pub struct PathToIdMap(pub fn(&str) -> Option<AssetId>);
 
 impl fmt::Debug for PathToIdMap {
@@ -42,6 +46,7 @@ impl fmt::Debug for PathToIdMap {
 }
 
 #[derive(Debug, Clone, Copy)]
+#[doc(hidden)]
 pub struct AssetDef {
     pub path: &'static str,
 
@@ -56,6 +61,6 @@ pub struct AssetDef {
     pub content: &'static [u8],
 }
 
-/// Simple ID to refer to one asset in one `Setup` or `Assets` struct.
+/// Simple ID to refer to one asset in a `Setup` or `Assets` struct.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct AssetId(pub u32);
