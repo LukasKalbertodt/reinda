@@ -45,6 +45,24 @@ impl Assets {
         })
     }
 
+    /// Returns the file contents of the asset referred to by `public_path`.
+    ///
+    /// The given path is the "public" path, as it is a part of the actual
+    /// request URI. This doesn't mean this parameter has to be the full path
+    /// component from the request URI; you likely want to serve your assets
+    /// under a subdirectory, like `/assets/` which you would have to remove
+    /// from the URI-path before calling this method. However, for assets with
+    /// hashed filenames, this method expects the hashed path and not the one
+    /// you specified in `assets!`.
+    ///
+    /// If no asset with the specified path exists, `Ok(None)` is returned. An
+    /// error is returned in debug mode for a variety of reasons. In release
+    /// mode, this method always returns `Ok(_)`. TODO: change return type to
+    /// typedef error never.
+    pub async fn get(&self, public_path: &str) -> Result<Option<Bytes>, Error> {
+        self.load_dynamic(public_path).await
+    }
+
     /// Returns the public path of the specified asset, i.e. the path that one
     /// would pass to `get`. TODO
     ///
@@ -66,7 +84,7 @@ impl Assets {
 
     /// Loads an asset but does not attempt to render it as a template. Thus,
     /// the returned data might not be ready to be served yet.
-    pub async fn load_raw(&self, path: &str) -> Result<RawAsset, Error> {
+    async fn load_raw(&self, path: &str) -> Result<RawAsset, Error> {
         let content = {
             #[cfg(debug_assertions)]
             {
@@ -97,7 +115,7 @@ impl Assets {
         })
     }
 
-    pub async fn load_dynamic(&self, start_path: &str) -> Result<Option<Bytes>, Error> {
+    async fn load_dynamic(&self, start_path: &str) -> Result<Option<Bytes>, Error> {
         match self.setup.path_to_id(start_path) {
             None => Ok(None),
             Some(start_id) => {
