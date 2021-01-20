@@ -46,6 +46,7 @@ pub struct AssetDef {
     pub path: &'static str,
 
     pub serve: bool,
+    pub dynamic: bool,
     pub hash: bool, // TODO
     pub template: bool,
     pub append: Option<&'static str>,

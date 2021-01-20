@@ -30,6 +30,7 @@ fn run(input: TokenStream) -> Result<TokenStream, syn::Error> {
         let hash = asset.hash;
         let serve = asset.serve;
         let template = asset.template;
+        let dynamic = asset.dynamic;
         let append = match asset.append {
             Some(s) => quote! { Some(#s) },
             None => quote! { None },
@@ -50,6 +51,7 @@ fn run(input: TokenStream) -> Result<TokenStream, syn::Error> {
                 path: #path,
                 serve: #serve,
                 hash: #hash,
+                dynamic: #dynamic,
                 template: #template,
                 append: #append,
                 prepend: #prepend,
@@ -83,6 +85,7 @@ struct Input {
 struct Asset {
     hash: bool,
     serve: bool,
+    dynamic: bool,
     template: bool,
     append: Option<String>,
     prepend: Option<String>,
@@ -93,6 +96,7 @@ impl Default for Asset {
         Self {
             hash: false,
             serve: true,
+            dynamic: false,
             template: false,
             append: None,
             prepend: None,

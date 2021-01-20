@@ -56,6 +56,7 @@ fn fields_to_asset(fields: Vec<Field>) -> Result<Asset, syn::Error> {
                 hash_span = Some(field.span);
             }
             FieldKind::Serve(v) => asset.serve = v,
+            FieldKind::Dynamic(v) => asset.dynamic = v,
             FieldKind::Template(v) => asset.template = v,
             FieldKind::Prepend(s) => asset.prepend = Some(s),
             FieldKind::Append(s) => asset.append = Some(s),
@@ -87,6 +88,7 @@ struct Field {
 enum FieldKind {
     Hash(bool),
     Serve(bool),
+    Dynamic(bool),
     Template(bool),
     Append(String),
     Prepend(String),
@@ -97,6 +99,7 @@ impl FieldKind {
         match self {
             Self::Hash(_) => "hash",
             Self::Serve(_) => "serve",
+            Self::Dynamic(_) => "dynamic",
             Self::Template(_) => "template",
             Self::Append(_) => "append",
             Self::Prepend(_) => "prepend",
@@ -110,6 +113,7 @@ impl Parse for Field {
         let kind = match &*ident.to_string() {
             "hash" => FieldKind::Hash(parse_opt_bool(&mut input)?),
             "serve" => FieldKind::Serve(parse_opt_bool(&mut input)?),
+            "dynamic" => FieldKind::Dynamic(parse_opt_bool(&mut input)?),
             "template" => FieldKind::Template(parse_opt_bool(&mut input)?),
             k @ "prepend" | k @ "append" => {
                 let _: syn::Token![:] = input.parse()?;
