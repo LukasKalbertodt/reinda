@@ -72,74 +72,106 @@ impl Assets {
     }
 
     pub async fn load_dynamic(&self, start_path: &str) -> Result<Option<Bytes>, Error> {
-        let start_idx = match self.setup.path_to_id(start_path) {
-            None => return Ok(None),
-            Some(idx) => idx,
-        };
+        match self.setup.path_to_id(start_path) {
+            None => Ok(None),
+            Some(start_id) => {
+                let resolver = self.dynamic_single_file_resolver(start_id).await?;
+                let resolved = self.resolve(resolver)?;
+                let out = {resolved}.remove(&start_id)
+                    .expect("resolver did not contain requested file");
 
-        // Step 1: Load the raw content of the requested files and all files
-        // recursively included by it.
-        let mut files = HashMap::new();
-        let mut graph = IncludeGraph::new();
-        let mut stack = vec![start_idx];
-        while let Some(idx) = stack.pop() {
+                Ok(Some(out))
+            }
+        }
+    }
+
+    /// Prepares a resolver to resolve a single file. The returned resolver
+    /// satisfies the preconditions for `Self::resolve`.
+    async fn dynamic_single_file_resolver(&self, asset_id: AssetId) -> Result<Resolver, Error> {
+        // Load the raw content of the requested files and all files recursively
+        // included by it.
+        let mut resolver = Resolver::new();
+        let mut stack = vec![asset_id];
+        while let Some(id) = stack.pop() {
             // If we already loaded this file, skip it. Asset IDs might be added
-            // to the stack multiple times if they are included multiple times.
-            if files.contains_key(&idx) {
+            // to the stack multiple times if they are included by different
+            // files.
+            if resolver.is_loaded(id) {
                 continue;
             }
 
-            let path = self.setup[idx].path;
+            let path = self.setup[id].path;
             let raw = self.load_raw(path).await?;
 
             if raw.unresolved_fragments.is_empty() {
                 // If there are no unresolved fragments at all, this is already
                 // ready.
-                files.insert(idx, ResolvingAsset::Resolved(raw.content));
+                resolver.resolved.insert(id, raw.content);
             } else {
                 // If there are still some templat fragments in the file, we
                 // need to resolve this later.
-                files.insert(idx, ResolvingAsset::Unresolved(raw.content));
+                resolver.unresolved.insert(id, raw.content);
 
                 // Add all included assets to the stack to recursively check.
                 let includes = raw.unresolved_fragments.into_iter().filter_map(|f| f.as_include());
                 for import_path in includes {
-                    let includee_idx = self.setup.path_to_id(&import_path)
+                    let includee_id = self.setup.path_to_id(&import_path)
                         .ok_or_else(|| Error::UnresolvedImport {
                             in_file: path.into(),
                             imported: import_path.into(),
                         })?;
 
-                    graph.add_include(idx, includee_idx);
-                    stack.push(includee_idx);
+                    resolver.graph.add_include(id, includee_id);
+                    stack.push(includee_id);
                 }
             }
         }
 
-        // Step 2: Now actually render the templates. We render in the
-        // topological sort order such that we never have to deal with an
-        // unresolved include.
+        Ok(resolver)
+    }
+
+    /// Resolves all assets in `resolver`.
+    ///
+    /// Assumes that all (recursive) includes of all unresolved files in
+    /// `resolver` are already loaded into the resolver, otherwise this method
+    /// will panic! This implies that all include paths are valid and refer to
+    /// assets in `self.setup`.
+    fn resolve(&self, resolver: Resolver) -> Result<HashMap<AssetId, Bytes>, Error> {
+        let Resolver { mut resolved, mut unresolved, graph } = resolver;
+
+        // We sort the include graph topologically such that we never have to
+        // deal with an unresolved include.
         let assets = graph.topological_sort().map_err(|cycle| {
             let cycle = cycle.into_iter().map(|id| self.setup[id].path.to_string()).collect();
             Error::CyclicInclude(cycle)
         })?;
 
         for idx in assets {
-            let template = match &files[&idx] {
-                ResolvingAsset::Resolved(_) => continue,
-                ResolvingAsset::Unresolved(template) => template,
+            let template = match unresolved.remove(&idx) {
+                // If `idx` is ont in `unresolved`, it is already resolved and
+                // we can skip it.
+                None => continue,
+                Some(template) => template,
             };
 
             let path = self.setup[idx].path;
-            let resolved = template::render(&template, |inner, mut appender| -> Result<_, Error> {
+            let resolved_template = template::render(&template, |inner, mut appender| -> Result<_, Error> {
                 match Fragment::from_bytes(inner, path)? {
-                    Fragment::Path(p) => appender.append(p.as_bytes()),
+                    Fragment::Path(p) => {
+                        // TODO
+                        appender.append(p.as_bytes())
+                    }
                     Fragment::Include(path) => {
-                        let id = self.setup.path_to_id(&path).unwrap(); // already checked above
-                        let data = files[&id].unwrap_resolved();
+                        // Regarding `unwrap` and `expect`: see method
+                        // preconditions.
+                        let id = self.setup.path_to_id(&path).unwrap();
+                        let data = resolved.get(&id)
+                            .expect("missing include in `Assets::resolve`");
+
                         appender.append(&data);
                     }
                     Fragment::Var(_) => {
+                        // TODO
                         appender.append(b"TODO");
                     }
                 }
@@ -147,14 +179,14 @@ impl Assets {
                 Ok(())
             })?;
 
-            let bytes = match resolved {
+            let bytes = match resolved_template {
                 Cow::Borrowed(_) => template.clone(),
                 Cow::Owned(v) => Bytes::from(v),
             };
-            *files.get_mut(&idx).unwrap() = ResolvingAsset::Resolved(bytes);
+            resolved.insert(idx, bytes);
         }
 
-        Ok(Some(files[&start_idx].unwrap_resolved().clone()))
+        Ok(resolved)
     }
 }
 
@@ -230,28 +262,24 @@ impl Fragment {
     }
 }
 
+
+
 struct Resolver {
-    state: HashMap<AssetId, ResolvingAsset>,
-}
-
-enum ResolvingAsset {
-    Unresolved(Bytes),
-    Resolved(Bytes),
-}
-
-impl ResolvingAsset {
-    fn unwrap_resolved(&self) -> &Bytes {
-        match self {
-            Self::Unresolved(_) => panic!("called `unwrap_resolved` on an unresolved asset"),
-            Self::Resolved(bytes) => bytes,
-        }
-    }
+    resolved: HashMap<AssetId, Bytes>,
+    unresolved: HashMap<AssetId, Bytes>,
+    graph: IncludeGraph,
 }
 
 impl Resolver {
     fn new() -> Self {
         Self {
-            state: HashMap::new(),
+            resolved: HashMap::new(),
+            unresolved: HashMap::new(),
+            graph: IncludeGraph::new(),
         }
+    }
+
+    fn is_loaded(&self, id: AssetId) -> bool {
+        self.resolved.contains_key(&id) || self.unresolved.contains_key(&id)
     }
 }
