@@ -59,7 +59,7 @@ impl Assets {
     /// error is returned in debug mode for a variety of reasons. In release
     /// mode, this method always returns `Ok(_)`. TODO: change return type to
     /// typedef error never.
-    pub async fn get(&self, public_path: &str) -> Result<Option<Bytes>, Error> {
+    pub async fn get(&self, public_path: &str) -> Result<Option<Bytes>, GetError> {
         #[cfg(debug_assertions)]
         {
             self.load_from_fs(public_path).await
@@ -136,6 +136,23 @@ impl Assets {
         Ok(Some(out))
     }
 }
+
+
+/// Error type for [`Assets::get`], which is different for dev and prod builds.
+///
+/// In dev mode, all files are loaded from file system when you call `get`. This
+/// can lead to errors (i.e. IO errors), so `get` returns a `Result<_, Error>`.
+/// As such, in dev mode, this is just an alias for [`Error`].
+///
+/// In prod mode however, all files are loaded and prepared in [`Assets::new`].
+/// The `get` method will never produce an error. Therefore, in prod mode, this
+/// is an alias to the never type, signaling that an error will never happen.
+#[cfg(debug_assertions)]
+pub type GetError = Error;
+
+/// See above.
+#[cfg(not(debug_assertions))]
+pub type GetError = std::convert::Infallible;
 
 /// All errors that might be returned by `reinda`.
 #[derive(Debug, thiserror::Error)]
