@@ -26,6 +26,11 @@ pub struct Assets {
 
     // TODO: maybe wrap into `RwLock` to make changable later.
     config: Config,
+
+    /// Stores the hashed paths of assets. This contains entries for hashed
+    /// paths only; assets without `hash` are not present here.
+    #[cfg(not(debug_assertions))]
+    hashed_paths: AHashMap<AssetId, String>,
 }
 
 
@@ -34,8 +39,29 @@ impl Assets {
         Ok(Self {
             setup,
             config,
-            // assets,
+
+            #[cfg(not(debug_assertions))]
+            hashed_paths: AHashMap::new(),
         })
+    }
+
+    /// Returns the public path of the specified asset, i.e. the path that one
+    /// would pass to `get`. TODO
+    ///
+    /// If the specified asset has a hashed path, that is returned. Otherwise
+    /// this function returns the same string as specified when defining the
+    /// asset with `assets!`.
+    pub fn public_path_of(&self, id: AssetId) -> &str {
+        #[cfg(not(debug_assertions))]
+        {
+            if let Some(s) = self.hashed_paths.get(&id) {
+                return s;
+            }
+        }
+
+        // If this point is reached, either the asset's path is not hashed or we
+        // are in debug mode, where we never hash paths.
+        self.setup[id].path
     }
 
     /// Loads an asset but does not attempt to render it as a template. Thus,
@@ -114,11 +140,11 @@ impl Assets {
 
                 // Add all included assets to the stack to recursively check.
                 let includes = raw.unresolved_fragments.into_iter().filter_map(|f| f.as_include());
-                for import_path in includes {
-                    let includee_id = self.setup.path_to_id(&import_path)
-                        .ok_or_else(|| Error::UnresolvedImport {
+                for include_path in includes {
+                    let includee_id = self.setup.path_to_id(&include_path)
+                        .ok_or_else(|| Error::UnresolvedInclude {
                             in_file: path.into(),
-                            imported: import_path.into(),
+                            included: include_path.into(),
                         })?;
 
                     resolver.graph.add_include(id, includee_id);
@@ -158,8 +184,13 @@ impl Assets {
             let resolved_template = template::render(&template, |inner, mut appender| -> Result<_, Error> {
                 match Fragment::from_bytes(inner, path)? {
                     Fragment::Path(p) => {
-                        // TODO
-                        appender.append(p.as_bytes())
+                        let id = self.setup.path_to_id(&p)
+                            .ok_or_else(|| Error::UnresolvedPath {
+                                in_file: path.into(),
+                                referenced: p.into(),
+                            })?;
+
+                        appender.append(self.public_path_of(id).as_bytes());
                     }
                     Fragment::Include(path) => {
                         // Regarding `unwrap` and `expect`: see method
@@ -203,7 +234,7 @@ pub enum Error {
     #[error("template fragment does not contain valid UTF8: {0:?}")]
     NonUtf8TemplateFragment(Vec<u8>),
 
-    #[error("unknown template fragment specifier {specifier} in file {path}")]
+    #[error("unknown template fragment specifier '{specifier}' in file '{path}'")]
     UnknownTemplateSpecifier {
         specifier: String,
         path: String,
@@ -212,17 +243,24 @@ pub enum Error {
     #[error("cyclic include detected: {0:?}")]
     CyclicInclude(Vec<String>),
 
-    #[error("unresolved import in '{in_file}': asset '{imported}' does not exist")]
-    UnresolvedImport {
+    #[error("unresolved include in '{in_file}': asset '{included}' does not exist")]
+    UnresolvedInclude {
         in_file: String,
-        imported: String,
+        included: String,
+    },
+
+    #[error("invalid path reference `{{{{: path:{referenced} :}}}}` in '{in_file}': \
+        referenced asset does not exist")]
+    UnresolvedPath {
+        in_file: String,
+        referenced: String,
     },
 
     #[error("variable '{key}' is used in '{file}', but that variable has not been defined")]
     MissingVariable {
         key: String,
         file: String,
-    }
+    },
 }
 
 /// An asset that has been loaded but which might still need to be rendered as
