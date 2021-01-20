@@ -7,16 +7,7 @@ pub mod template;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct AssetId(pub u32);
 
-/// An opaque structure that holds metadata and (in prod mode) the included raw
-/// asset data.
-///
-/// **Note**: the fields of this struct are public in order for it to be
-/// const-constructed in `assets!`. There are also a some public methods on this
-/// type for a similar reason. However, the fields and methods are not
-/// considered part of the public API of `reinda` and as such you shouldn't use
-/// them as they might change in minor version updates. Treat this type as
-/// opaque! (In case you were wondering, all those fields and methods have been
-/// hidden in the docs).
+// See documentation in the main crate.
 #[derive(Debug, Clone, Copy)]
 pub struct Setup {
     #[doc(hidden)]

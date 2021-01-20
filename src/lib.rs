@@ -11,8 +11,107 @@ mod include_graph;
 mod resolve;
 
 
+/// Compile time configuration of assets. Returns a [`Setup`].
+///
+/// Simple example:
+///
+/// ```
+/// use reinda::{assets, Setup};
+///
+/// const ASSETS: Setup = assets! {
+///     #![base_path = "frontend/build"]
+///
+///     "index.html": { template },
+///     "bundle.js": { hash },
+/// };
+/// ```
+///
+///
+/// # Syntax
+///
+/// The basic syntax looks like this:
+///
+/// ```ignore
+/// use reinda::{assets, Setup};
+///
+/// const ASSETS: Setup = assets! {
+///     #![global_setting1 = "value1"]
+///     #![global_setting2 = 3]
+///
+///     "path/to/asset-x.html": {
+///         asset_setting_a: false,
+///         asset_setting_b: "data",
+///     },
+///     "another-path/asset-y.js": {
+///         asset_setting_b: "other data",
+///     },
+/// };
+/// ```
+///
+/// ## Global settings
+///
+/// - **`base_path`** (string): specifies a base path. It is relative to
+///   `CARGO_MANIFEST_DIR`. The resulting compile time path of an asset is
+///   `$CARGO_MANIFEST_DIR/$base_path/$asset_path`. When assets are loaded at
+///   runtime, everything is relative to the current directory instead of
+///   `CARGO_MANIFEST_DIR`. You can overwrite the base path for the runtime via
+///   [`Config::base_path`].
+///
+/// ## Assets
+///
+/// Each asset is defined by a path, followed by colon and then a set of
+/// settings for that asset. In many cases, the path can simply be a file name.
+/// See the `base_path` global setting.
+///
+/// The settings are specified with the Rust struct initializer syntax. However,
+/// you can just omit fields for which you want to use the default value. Also,
+/// boolean fields can omit their value if it is `true`. For example,
+/// `"bundle.js": { template }` is the same as `"bundle.js": { template: true
+/// }`.
+///
+///
+/// Asset settings:
+///
+/// - **`serve`** (bool, default: `true`): if set to `false`, this asset cannot
+///   be directly retrieved via [`Assets::get`]. This only makes sense for
+///   assets that are intended to be included by another asset.
+///
+/// - **`template`** (bool, default: `false`): if set to `true`, the included
+///   file is treated as a template with the `reinda` specific template syntax.
+///   Otherwise it is treated as verbatim file.
+///
+/// - **`dynamic`** (bool, default: `false`): if set to `true`, this is treated
+///   as a dynamic asset which has to be loaded at runtime and cannot be
+///   embedded. In dev mode, the asset is loaded on each [`Assets::get`] (like
+///   all other assets); in prod mode, it is loaded from the file system in
+///   `Assets::new`.
+///
+/// - **`hash`** (bool, default: `false`): if set to `true`, a hash of the
+///   asset's contents are included into its filename. [`Assets::get`] won't
+///   serve it with the path you specified in this macro, but with a path that
+///   includes a hash. Filename hashing is disable in dev mode.
+///
+/// - **`prepend`/`append`** (optional string, default: `None`): if specified, a
+///   fixed string is prepended or appended to the included asset before any
+///   other processing (e.g. template) takes place.
+///
 pub use reinda_macros::assets;
-pub use reinda_core::{AssetDef, AssetId, PathToIdMap, Setup};
+
+/// An opaque structure that holds metadata and (in prod mode) the included raw
+/// asset data.
+///
+/// **Note**: the fields of this struct are public in order for it to be
+/// const-constructed in [`assets!`]. There are also a some public methods on
+/// this type for a similar reason. However, the fields and methods are not
+/// considered part of the public API of `reinda` and as such you shouldn't use
+/// them as they might change in minor version updates. Treat this type as
+/// opaque! (In case you were wondering, all those fields and methods have been
+/// hidden in the docs).
+pub use reinda_core::Setup;
+
+// We don't really want to expose those, but we are forced to in order for
+// `assets!` to work.
+pub use reinda_core::{AssetDef, AssetId, PathToIdMap};
 
 
 /// Runtime configuration.

@@ -7,6 +7,8 @@ use quote::quote;
 mod parse;
 
 
+
+// See documentation in the main crate.
 #[proc_macro]
 pub fn assets(input: TokenStream1) -> TokenStream1 {
     run(input.into())
