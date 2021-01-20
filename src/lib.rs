@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, path::{Path, PathBuf}};
 use bytes::Bytes;
 use ahash::AHashMap;
 
@@ -81,43 +81,26 @@ impl Assets {
         // are in debug mode, where we never hash paths.
         self.setup[id].path
     }
+}
 
-    /// Loads an asset but does not attempt to render it as a template. Thus,
-    /// the returned data might not be ready to be served yet.
-    async fn load_raw(&self, path: &str) -> Result<Template, Error> {
-        let id = self.setup.path_to_id(path).expect("called `read_raw` with invalid path");
+// Private methods.
+impl Assets {
+    /// Loads an asset from the file system and returns the raw bytes. IO errors
+    /// are returned. Caller should make sure that `path` is actually a valid,
+    /// listed asset.
+    async fn load_raw_dynamic(&self, path: &str) -> Result<Bytes, Error> {
+        let base = self.config.base_path.as_deref()
+            .unwrap_or(Path::new(self.setup.base_path));
+        let content = tokio::fs::read(base.join(path)).await?;
 
-        let content = {
-            #[cfg(debug_assertions)]
-            {
-                use std::path::Path;
-
-                let base = self.config.base_path.as_deref()
-                    .unwrap_or(Path::new(self.setup.base_path));
-
-                Bytes::from(tokio::fs::read(base.join(path)).await?)
-            }
-
-            #[cfg(not(debug_assertions))]
-            {
-                let asset = self.setup[id];
-                Bytes::from_static(asset.content)
-            }
-        };
-
-        if self.setup[id].template {
-            Template::parse(content)
-                .map_err(|err| Error::Template { err, file: path.into() })
-        } else {
-            Ok(Template::literal(content))
-        }
+        Ok(Bytes::from(content))
     }
 
     async fn load_dynamic(&self, start_path: &str) -> Result<Option<Bytes>, Error> {
         match self.setup.path_to_id(start_path) {
             None => Ok(None),
             Some(start_id) => {
-                let resolver = self.dynamic_single_file_resolver(start_id).await?;
+                let resolver = self.dynamic_single_asset_resolver(start_id).await?;
                 let resolved = self.resolve(resolver)?;
                 let out = {resolved}.remove(&start_id)
                     .expect("resolver did not contain requested file");
@@ -129,7 +112,7 @@ impl Assets {
 
     /// Prepares a resolver to resolve a single file. The returned resolver
     /// satisfies the preconditions for `Self::resolve`.
-    async fn dynamic_single_file_resolver(&self, asset_id: AssetId) -> Result<Resolver, Error> {
+    async fn dynamic_single_asset_resolver(&self, asset_id: AssetId) -> Result<Resolver, Error> {
         // Load the raw content of the requested files and all files recursively
         // included by it.
         let mut resolver = Resolver::new();
@@ -143,9 +126,13 @@ impl Assets {
             }
 
             let path = self.setup[id].path;
-            let template = self.load_raw(path).await?;
+            let raw_asset = RawAsset::new(
+                self.load_raw_dynamic(path).await?,
+                self.setup[id].template,
+                path,
+            )?;
 
-            match template.into_already_rendered() {
+            match raw_asset.into_already_rendered() {
                 Ok(resolved) => {
                     // If there are no unresolved fragments at all, this is
                     // already ready.
@@ -292,5 +279,31 @@ impl Resolver {
 
     fn is_loaded(&self, id: AssetId) -> bool {
         self.resolved.contains_key(&id) || self.unresolved.contains_key(&id)
+    }
+}
+
+enum RawAsset {
+    /// A template asset that still has to be rendered.
+    Template(Template),
+    /// A literal asset that does not need any template processing.
+    Literal(Bytes),
+}
+
+impl RawAsset {
+    fn new(raw: Bytes, template: bool, path: &str) -> Result<Self, Error> {
+        if template {
+            let t = Template::parse(raw)
+                .map_err(|err| Error::Template { err, file: path.into() })?;
+            Ok(Self::Template(t))
+        } else {
+            Ok(Self::Literal(raw))
+        }
+    }
+
+    fn into_already_rendered(self) -> Result<Bytes, Template> {
+        match self {
+            Self::Template(t) => t.into_already_rendered(),
+            Self::Literal(b) => Ok(b),
+        }
     }
 }
