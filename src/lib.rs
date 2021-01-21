@@ -7,7 +7,7 @@ use ahash::AHashMap;
 use reinda_core::template;
 use crate::resolve::Resolver;
 
-mod include_graph;
+mod dep_graph;
 mod resolve;
 
 

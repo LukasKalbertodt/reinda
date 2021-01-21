@@ -8,7 +8,7 @@ use reinda_core::{
 };
 use crate::{
     Config, Error, Setup,
-    include_graph::IncludeGraph,
+    dep_graph::DepGraph,
 };
 
 
@@ -17,7 +17,7 @@ use crate::{
 pub(crate) struct Resolver {
     resolved: AHashMap<AssetId, Bytes>,
     unresolved: AHashMap<AssetId, Template>,
-    graph: IncludeGraph,
+    graph: DepGraph,
 }
 
 impl Resolver {
@@ -25,7 +25,7 @@ impl Resolver {
         Self {
             resolved: AHashMap::new(),
             unresolved: AHashMap::new(),
-            graph: IncludeGraph::new(),
+            graph: DepGraph::new(),
         }
     }
 
@@ -76,7 +76,7 @@ impl Resolver {
             resolver.add_raw(raw_bytes, id, &setup)?;
 
             // Add all included assets to the stack to recursively check.
-            stack.extend(resolver.graph.includes_of(id));
+            stack.extend(resolver.graph.dependencies_of(id));
         }
 
         Ok(resolver)
@@ -174,7 +174,7 @@ impl Resolver {
                             included: include_path.into(),
                         })?;
 
-                    self.graph.add_include(asset_id, includee_id);
+                    self.graph.add_dependency(asset_id, includee_id);
                 }
 
                 self.unresolved.insert(asset_id, template);
