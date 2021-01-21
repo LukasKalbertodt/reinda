@@ -25,19 +25,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let assets = Assets::new(ASSETS, config).await?;
 
-    for path in ASSETS.assets.iter().map(|a| a.path) {
-        println!("### {}", path);
+    for asset_id in assets.asset_ids() {
+        let info = assets.asset_info(asset_id).unwrap();
+        println!("########## {}", info.original_path());
+        println!("# > public_path: {}", info.public_path());
+        println!("# > serve: {}", info.is_served());
+        println!("# > dynamic: {}", info.is_dynamic());
 
-        // match assets.load_raw(path).await? {
-        //     None => println!("doesn't exist"),
-        //     Some(raw) => {
-        //         println!("{:?}", raw.unresolved_fragments);
-        //         println!("--------------\n{}-----------", String::from_utf8_lossy(&raw.content));
-        //     }
-        // }
-
-        match assets.get(path).await? {
-            None => println!("doesn't exist"),
+        match assets.get(info.public_path()).await? {
+            None => println!("# > doesn't exist!!!"),
             Some(bytes) => println!("{}", String::from_utf8_lossy(&bytes)),
         }
 

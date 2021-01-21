@@ -187,23 +187,33 @@ impl Assets {
         }
     }
 
-    /// Returns the public path of the specified asset, i.e. the path that one
-    /// would pass to `get`. TODO
-    ///
-    /// If the specified asset has a hashed path, that is returned. Otherwise
-    /// this function returns the same string as specified when defining the
-    /// asset with `assets!`.
-    pub fn public_path_of(&self, id: AssetId) -> &str {
-        #[cfg(not(debug_assertions))]
-        {
-            if let Some(s) = self.public_paths.get(&id) {
-                return s;
-            }
-        }
+    /// Returns an iterator over the IDs of all assets.
+    pub fn asset_ids(&self) -> impl Iterator<Item = AssetId> {
+        (0..self.setup.assets.len()).map(|i| AssetId(i as u32))
+    }
 
-        // If this point is reached, either the asset's path is not hashed or we
-        // are in debug mode, where we never hash paths.
-        self.setup.def(id).path
+    /// Returns meta information about a specific asset, or `None` if no asset
+    /// with the given ID exists.
+    pub fn asset_info(&self, id: AssetId) -> Option<Info<'_>> {
+        let def = self.setup.assets.get(id.0 as usize)?;
+        let public_path = {
+            #[cfg(not(debug_assertions))]
+            {
+                self.public_paths.get(&id).map(|s| &**s)
+            }
+
+            #[cfg(debug_assertions)]
+            {
+                None
+            }
+        };
+
+        Some(Info {
+            original_path: def.path,
+            public_path,
+            serve: def.serve,
+            dynamic: def.dynamic,
+        })
     }
 }
 
@@ -314,4 +324,39 @@ pub enum Error {
         key: String,
         file: String,
     },
+}
+
+/// Contains meta information about an asset.
+pub struct Info<'a> {
+    original_path: &'static str,
+    public_path: Option<&'a str>,
+    serve: bool,
+    dynamic: bool,
+}
+
+impl<'a> Info<'a> {
+    /// Returns the original path specified in the [`assets!`] invocation.
+    pub fn original_path(&self) -> &'static str {
+        self.original_path
+    }
+
+    /// Returns the public path, which might be the same as `original_path` or
+    /// might contain a hash if `hash` was specified in [`assets!`] for this
+    /// asset.
+    pub fn public_path(&self) -> &'a str {
+        self.public_path.unwrap_or(self.original_path)
+    }
+
+    /// Returns whether or not this asset is publicly served. Equals the `serve`
+    /// specification in the [`assets!`] macro.
+    pub fn is_served(&self) -> bool {
+        self.serve
+    }
+
+    /// Returns whether this asset is always loaded at runtime (either at
+    /// startup or when requested) as opposed to being embeded. Equals the
+    /// `dynamic` specification in the [`assets!`] macro.
+    pub fn is_dynamic(&self) -> bool {
+        self.dynamic
+    }
 }
