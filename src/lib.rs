@@ -51,7 +51,7 @@ mod resolve;
 ///
 /// ## Global settings
 ///
-/// - **`base_path`** (string): specifies a base path. It is relative to
+/// - **`base_path`** (string, required): specifies a base path. It is relative to
 ///   `CARGO_MANIFEST_DIR`. The resulting compile time path of an asset is
 ///   `$CARGO_MANIFEST_DIR/$base_path/$asset_path`. When assets are loaded at
 ///   runtime, everything is relative to the current directory instead of

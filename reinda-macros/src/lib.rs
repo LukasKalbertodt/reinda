@@ -1,7 +1,7 @@
 use std::convert::TryInto;
 
 use proc_macro::TokenStream as TokenStream1;
-use proc_macro2::TokenStream;
+use proc_macro2::{Span, TokenStream};
 use quote::quote;
 
 mod parse;
@@ -62,7 +62,12 @@ fn run(input: TokenStream) -> Result<TokenStream, syn::Error> {
         });
     }
 
-    let base_path = &input.base_path;
+    let base_path = &input.base_path.as_ref().ok_or(syn::Error::new(
+        Span::call_site(),
+        "`base_path` is not set. Please add `#![base_path = \"...\"]` to the top \
+            of this macro invocation.",
+    ))?;
+
     Ok(quote! {
         reinda::Setup {
             base_path: #base_path,
