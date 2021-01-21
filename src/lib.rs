@@ -82,6 +82,8 @@
 //!   the `assets!` macro. Cargo does this automatically. But if you, for some
 //!   reason, compile manually with `rustc`, you have to set that value.
 
+#![deny(missing_debug_implementations)]
+
 use std::{collections::HashMap, path::PathBuf};
 use bytes::Bytes;
 
@@ -416,6 +418,7 @@ pub enum Error {
 }
 
 /// Contains meta information about an asset.
+#[derive(Debug)]
 pub struct Info<'a> {
     original_path: &'static str,
     public_path: Option<&'a str>,

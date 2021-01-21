@@ -16,6 +16,7 @@ use crate::{
 
 /// State to resolve multiple asset templates with includes and other
 /// dependencies.
+#[derive(Debug)]
 pub(crate) struct Resolver {
     resolved: AHashMap<AssetId, Bytes>,
     unresolved: AHashMap<AssetId, Template>,
@@ -274,6 +275,7 @@ async fn load_raw_from_fs(
     Ok(Bytes::from(out))
 }
 
+#[derive(Debug)]
 enum RawAsset {
     /// A template asset that still has to be rendered.
     Template(Template),

@@ -4,9 +4,11 @@ use ahash::{AHashMap, AHashSet};
 use reinda_core::AssetId;
 
 
+#[derive(Debug)]
 pub(crate) struct DepGraph(AHashMap<AssetId, NodeData>);
 
 #[derive(Default)]
+#[derive(Debug)]
 struct NodeData {
     /// List of assets this asset depends on.
     dependencies: AHashSet<AssetId>,

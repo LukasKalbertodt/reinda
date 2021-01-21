@@ -36,6 +36,7 @@ impl Appender<'_> {
 /// The string between the start and end tag is then trimmed (excess whitespace
 /// removed) and parsed into a [`Fragment`]. See that type's documentation for
 /// information about the existing kinds of fragments.
+#[derive(Debug)]
 pub struct Template {
     raw: Bytes,
     fragments: Vec<SpannedFragment>,
@@ -51,6 +52,7 @@ pub enum Error {
 }
 
 /// A fragment with a span.
+#[derive(Debug)]
 struct SpannedFragment {
     span: Range<usize>,
     kind: Fragment,
