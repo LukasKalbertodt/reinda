@@ -3,7 +3,7 @@ use std::{collections::HashMap, unreachable};
 use proc_macro2::Span;
 use syn::{parse::{Parse, ParseStream}, punctuated::Punctuated, spanned::Spanned};
 
-use crate::{Asset, Input};
+use crate::{Asset, AssetSettings, Input};
 
 
 impl Parse for Input {
@@ -37,17 +37,19 @@ impl Parse for Input {
         // Parse list of entries/assets
         let entries = input.call(<Punctuated<Entry, syn::Token![,]>>::parse_terminated)?;
         let assets = entries.into_iter()
-            .map(|entry| {
-                Ok((entry.key.value(), fields_to_asset(entry.fields)?))
-            })
+            .map(|entry| Ok(Asset {
+                path: entry.key.value(),
+                path_span: entry.key.span(),
+                settings: fields_to_settings(entry.fields)?,
+            }))
             .collect::<Result<_, syn::Error>>()?;
 
         Ok(Self { assets, base_path })
     }
 }
 
-fn fields_to_asset(fields: Vec<Field>) -> Result<Asset, syn::Error> {
-    let mut asset = Asset::default();
+fn fields_to_settings(fields: Vec<Field>) -> Result<AssetSettings, syn::Error> {
+    let mut asset = AssetSettings::default();
     let mut hash_span = None;
     for field in fields {
         match field.kind {

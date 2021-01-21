@@ -1,4 +1,4 @@
-use std::convert::TryInto;
+use std::{convert::TryInto, fs::File, io::Read};
 
 use proc_macro::TokenStream as TokenStream1;
 use proc_macro2::{Span, TokenStream};
@@ -23,29 +23,30 @@ fn run(input: TokenStream) -> Result<TokenStream, syn::Error> {
     let mut match_arms = Vec::new();
     let mut asset_defs = Vec::new();
 
-    for (path, asset) in input.assets {
+    for asset in input.assets {
+        let path = &asset.path;
         let idx: u32 = match_arms.len().try_into().expect("you have more than 2^32 assets?!");
         match_arms.push(quote! {
             #path => Some(reinda::AssetId(#idx)),
         });
 
-        let hash = asset.hash;
-        let serve = asset.serve;
-        let template = asset.template;
-        let dynamic = asset.dynamic;
-        let append = match asset.append {
+        let hash = asset.settings.hash;
+        let serve = asset.settings.serve;
+        let template = asset.settings.template;
+        let dynamic = asset.settings.dynamic;
+        let append = match &asset.settings.append {
             Some(s) => quote! { Some(#s) },
             None => quote! { None },
         };
-        let prepend = match asset.prepend {
+        let prepend = match &asset.settings.prepend {
             Some(s) => quote! { Some(#s) },
             None => quote! { None },
         };
         let content_field = if cfg!(debug_assertions) {
             quote! {}
         } else {
-            let full_path = resolve_path(&input.base_path, &path);
-            quote! { content: include_bytes!(#full_path) }
+            let data = embed(input.base_path.as_deref(), &asset)?;
+            quote! { content: #data }
         };
 
         asset_defs.push(quote! {
@@ -85,11 +86,18 @@ fn run(input: TokenStream) -> Result<TokenStream, syn::Error> {
 #[derive(Debug)]
 struct Input {
     base_path: Option<String>,
-    assets: Vec<(String, Asset)>,
+    assets: Vec<Asset>,
 }
 
 #[derive(Debug)]
 struct Asset {
+    path: String,
+    path_span: Span,
+    settings: AssetSettings,
+}
+
+#[derive(Debug)]
+struct AssetSettings {
     hash: bool,
     serve: bool,
     dynamic: bool,
@@ -98,7 +106,7 @@ struct Asset {
     prepend: Option<String>,
 }
 
-impl Default for Asset {
+impl Default for AssetSettings {
     fn default() -> Self {
         Self {
             hash: false,
@@ -111,13 +119,49 @@ impl Default for Asset {
     }
 }
 
-fn resolve_path(base: &Option<String>, path: &str) -> String {
-    match base {
+fn embed(
+    base: Option<&str>,
+    asset: &Asset,
+) -> Result<TokenStream, syn::Error> {
+    let path = match base {
         Some(base) => {
             let manifest = std::env::var("CARGO_MANIFEST_DIR")
                 .expect("CARGO_MANIFEST_DIR not set");
-            format!("{}/{}/{}", manifest, base, &path)
+            format!("{}/{}/{}", manifest, base, &asset.path)
         },
-        None => path.to_string(),
+        None => asset.path.to_string(),
+    };
+
+    // Start with the "prepend" data, if any.
+    let mut data = Vec::new();
+    if let Some(prepend) = &asset.settings.prepend {
+        data.extend_from_slice(prepend.as_bytes());
     }
+
+    // Read the full file.
+    let mut file = File::open(&path).map_err(|e| {
+        let msg = format!("could not open '{}': {}", asset.path, e);
+        syn::Error::new(asset.path_span, msg)
+    })?;
+    file.read_to_end(&mut data).map_err(|e| {
+        let msg = format!("could not read '{}': {}", asset.path, e);
+        syn::Error::new(asset.path_span, msg)
+    })?;
+
+    // Add the "append" data, if any.
+    if let Some(append) = &asset.settings.append {
+        data.extend_from_slice(append.as_bytes());
+    }
+
+
+    let lit = syn::LitByteStr::new(&data, Span::call_site());
+    Ok(quote! {
+        {
+            // This is to make cargo/the compiler understand that we want to be
+            // recompiled if that file changes.
+            include_bytes!(#path);
+
+            #lit
+        }
+    })
 }
