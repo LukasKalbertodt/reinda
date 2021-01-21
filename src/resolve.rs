@@ -1,6 +1,7 @@
-use std::path::Path;
-use bytes::Bytes;
 use ahash::AHashMap;
+use bytes::Bytes;
+use std::path::Path;
+use tokio::io::AsyncReadExt;
 
 use reinda_core::{
     AssetDef, AssetId,
@@ -39,7 +40,7 @@ impl Resolver {
             let id = AssetId(id as u32);
 
             let raw_bytes = if asset_def.dynamic {
-                load_raw_from_fs(asset_def.path, setup, config).await?
+                load_raw_from_fs(id, setup, config).await?
             } else {
                 Bytes::from_static(asset_def.content)
             };
@@ -72,8 +73,7 @@ impl Resolver {
             }
 
             // Load file contents and add it to the resolver
-            let path = setup.def(id).path;
-            let raw_bytes = load_raw_from_fs(path, setup, config).await?;
+            let raw_bytes = load_raw_from_fs(id, setup, config).await?;
             resolver.add_raw(raw_bytes, id, &setup)?;
 
             // Add all included assets to the stack to recursively check.
@@ -240,12 +240,30 @@ fn dependency_in_fragment(
 /// Loads an asset from the file system and returns the raw bytes. IO errors
 /// are returned. Caller should make sure that `path` is actually a valid,
 /// listed asset.
-async fn load_raw_from_fs(path: &str, setup: &Setup, config: &Config) -> Result<Bytes, Error> {
+async fn load_raw_from_fs(
+    id: AssetId,
+    setup: &Setup,
+    config: &Config,
+) -> Result<Bytes, Error> {
+    let def = setup.def(id);
     let base = config.base_path.as_deref()
         .unwrap_or(Path::new(setup.base_path));
-    let content = tokio::fs::read(base.join(path)).await?;
+    let path = base.join(def.path);
 
-    Ok(Bytes::from(content))
+
+    let mut out = Vec::new();
+    if let Some(prepend) = def.prepend {
+        out.extend_from_slice(prepend.as_bytes());
+    }
+
+    let mut file = tokio::fs::File::open(path).await?;
+    file.read_to_end(&mut out).await?;
+
+    if let Some(append) = def.append {
+        out.extend_from_slice(append.as_bytes());
+    }
+
+    Ok(Bytes::from(out))
 }
 
 enum RawAsset {

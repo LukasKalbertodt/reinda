@@ -12,7 +12,7 @@ reinda-macros = { path = "reinda-macros" }
 base64 = "0.13"
 bytes = "1"
 sha2 = "0.9"
-tokio = { version = "1", features = ["fs"] }
+tokio = { version = "1", features = ["fs", "io-util"] }
 thiserror = "1"
 
 [dev-dependencies]
