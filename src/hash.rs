@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use bytes::Bytes;
+use reinda_core::AssetDef;
 use sha2::{Digest, Sha256};
 
 
@@ -8,8 +9,18 @@ use sha2::{Digest, Sha256};
 /// filename.
 const HASH_BYTES_IN_FILENAME: usize = 6;
 
-pub(crate) fn hashed_path_of(path: &str, content: &Bytes) -> String {
+pub(crate) fn hashed_path_of(def: &AssetDef, content: &Bytes) -> String {
+    let (first, second) = def.hash.expect("called `hashed_path_of`, but `def.hash` is None");
+
     let mut out = String::new();
+
+    // First add the parent directory, if any.
+    if let Some(parent) = Path::new(def.path).parent() {
+        out.push_str(parent.to_str().unwrap());
+    }
+
+    // Next, the first part of the filename.
+    out.push_str(first);
 
     // Calc and then base64 encode the hash.
     let hash = Sha256::digest(&content);
@@ -19,13 +30,8 @@ pub(crate) fn hashed_path_of(path: &str, content: &Bytes) -> String {
         &mut out,
     );
 
-    out.push('-');
-
-    let filename = Path::new(path).file_name()
-        .expect("asset path has no filename")
-        .to_str()
-        .unwrap();
-    out.push_str(filename);
+    // Finally the second part of the filename
+    out.push_str(second);
 
     out
 }

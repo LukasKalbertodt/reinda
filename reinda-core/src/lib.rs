@@ -52,7 +52,9 @@ pub struct AssetDef {
 
     pub serve: bool,
     pub dynamic: bool,
-    pub hash: bool, // TODO
+
+    /// Contains two strings in between which the hash should be inserted.
+    pub hash: Option<(&'static str, &'static str)>,
     pub template: bool,
     pub append: Option<&'static str>,
     pub prepend: Option<&'static str>,
@@ -66,6 +68,6 @@ impl AssetDef {
     /// prod mode, this returns `self.hash`, in dev mode this always returns
     /// `false`.
     pub fn hashed_filename(&self) -> bool {
-        self.hash && cfg!(not(debug_assertions))
+        self.hash.is_some() && cfg!(not(debug_assertions))
     }
 }

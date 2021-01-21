@@ -173,14 +173,40 @@ mod resolve;
 ///   all other assets); in prod mode, it is loaded from the file system in
 ///   `Assets::new`.
 ///
-/// - **`hash`** (bool, default: `false`): if set to `true`, a hash of the
-///   asset's contents are included into its filename. [`Assets::get`] won't
-///   serve it with the path you specified in this macro, but with a path that
-///   includes a hash. Filename hashing is disable in dev mode.
+/// - **`hash`** (optional pair of strings): see section about hashed filenames
+///   below.
 ///
 /// - **`prepend`/`append`** (optional string, default: `None`): if specified, a
 ///   fixed string is prepended or appended to the included asset before any
 ///   other processing (e.g. template) takes place.
+///
+///
+/// ### Hashed filename
+///
+/// If `hash` is specified for an asset, a hash of the asset's contents are
+/// included intoits filename.[`Assets::get`] won't serve it with the path you
+/// specified in this macro, but with a path that includes a hash. Filename
+/// hashing is disable in dev mode.
+///
+/// By default, the hash (and an additional `.`) will be inserted before the
+/// first `.` in the filename of the asset's path. If that filename does not
+/// contain a `.`, a `-` and the hash is appeneded to the filename. For
+/// example:
+///
+/// - `sub/main.js.map` → `sub/main.JdeK1YeQ90aJ.js.map`
+/// - `folder/raw-data` → `folder/raw-data-JdeK1YeQ90aJ`
+///
+/// If that doesn't suit you, you can override this behavior by specifying two
+/// strings in between which the hash will be inserted. For example:
+///
+/// ```text
+/// "main-v1.0-min.js.map": {
+///     hash: "main-v1.0-min." ... ".js.map",
+/// }
+/// ```
+///
+/// The resulting filename would be `main-v1.0-min.JdeK1YeQ90aJ.js.map` for
+/// example.
 ///
 pub use reinda_macros::assets;
 

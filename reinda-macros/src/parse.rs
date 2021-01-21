@@ -54,7 +54,7 @@ fn fields_to_settings(fields: Vec<Field>) -> Result<AssetSettings, syn::Error> {
     for field in fields {
         match field.kind {
             FieldKind::Hash(v) => {
-                asset.hash = v;
+                asset.hash = Some(v);
                 hash_span = Some(field.span);
             }
             FieldKind::Serve(v) => asset.serve = v,
@@ -65,7 +65,7 @@ fn fields_to_settings(fields: Vec<Field>) -> Result<AssetSettings, syn::Error> {
         }
     }
 
-    if !asset.serve && asset.hash {
+    if !asset.serve && asset.hash.is_some() {
         return Err(syn::Error::new(
             hash_span.unwrap(),
             "a hashed file name does not make sense for an asset that is not served",
@@ -88,7 +88,7 @@ struct Field {
 }
 
 enum FieldKind {
-    Hash(bool),
+    Hash(Option<(String, String)>),
     Serve(bool),
     Dynamic(bool),
     Template(bool),
@@ -113,10 +113,21 @@ impl Parse for Field {
     fn parse(mut input: ParseStream) -> Result<Self, syn::Error> {
         let ident = input.parse::<syn::Ident>()?;
         let kind = match &*ident.to_string() {
-            "hash" => FieldKind::Hash(parse_opt_bool(&mut input)?),
             "serve" => FieldKind::Serve(parse_opt_bool(&mut input)?),
             "dynamic" => FieldKind::Dynamic(parse_opt_bool(&mut input)?),
             "template" => FieldKind::Template(parse_opt_bool(&mut input)?),
+            "hash" => {
+                if input.peek(syn::Token![:]) {
+                    let _: syn::Token![:] = input.parse()?;
+                    let first: syn::LitStr = input.parse()?;
+                    let _: syn::Token![...] = input.parse()?;
+                    let second: syn::LitStr = input.parse()?;
+
+                    FieldKind::Hash(Some((first.value(), second.value())))
+                } else {
+                    FieldKind::Hash(None)
+                }
+            }
             k @ "prepend" | k @ "append" => {
                 let _: syn::Token![:] = input.parse()?;
                 let s = input.parse::<syn::LitStr>()?.value();

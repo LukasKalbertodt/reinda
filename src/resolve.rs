@@ -159,7 +159,7 @@ impl Resolver {
             // If a hashed filename is requested, calculate that filename so
             // that subsequent assets can use it.
             if def.hashed_filename() {
-                let hashed = hash::hashed_path_of(def.path, &resolved[&id]);
+                let hashed = hash::hashed_path_of(def, &resolved[&id]);
                 public_paths.insert(id, hashed);
             }
         }

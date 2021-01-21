@@ -1,4 +1,4 @@
-use std::{convert::TryInto, fs::File, io::Read};
+use std::{convert::TryInto, fs::File, io::Read, path::Path};
 
 use proc_macro::TokenStream as TokenStream1;
 use proc_macro2::{Span, TokenStream};
@@ -30,7 +30,31 @@ fn run(input: TokenStream) -> Result<TokenStream, syn::Error> {
             #path => Some(reinda::AssetId(#idx)),
         });
 
-        let hash = asset.settings.hash;
+        let hash = match &asset.settings.hash {
+            None => quote! { None },
+            Some(Some((a, b))) => quote! { Some((#a, #b)) },
+            Some(None) => {
+                let filename = Path::new(path)
+                    .file_name()
+                    .expect("no filename in path")
+                    .to_str()
+                    .unwrap();
+
+                let (a, b) = match filename.find('.') {
+                    Some(pos) => (
+                        format!("{}.", &filename[..pos]),
+                        &filename[pos..]
+                    ),
+                    None => (
+                        format!("{}-", &filename),
+                        "",
+                    )
+                };
+
+                quote! { Some((#a, #b)) }
+            }
+        };
+
         let serve = asset.settings.serve;
         let template = asset.settings.template;
         let dynamic = asset.settings.dynamic;
@@ -98,10 +122,10 @@ struct Asset {
 
 #[derive(Debug)]
 struct AssetSettings {
-    hash: bool,
     serve: bool,
     dynamic: bool,
     template: bool,
+    hash: Option<Option<(String, String)>>,
     append: Option<String>,
     prepend: Option<String>,
 }
@@ -109,10 +133,10 @@ struct AssetSettings {
 impl Default for AssetSettings {
     fn default() -> Self {
         Self {
-            hash: false,
             serve: true,
             dynamic: false,
             template: false,
+            hash: None,
             append: None,
             prepend: None,
         }
