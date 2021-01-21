@@ -7,7 +7,7 @@ use sha2::{Digest, Sha256};
 
 /// How many bytes of the 32 byte (256 bit) hash are used and encoded in the
 /// filename.
-const HASH_BYTES_IN_FILENAME: usize = 6;
+const HASH_BYTES_IN_FILENAME: usize = 9;
 
 pub(crate) fn hashed_path_of(def: &AssetDef, content: &Bytes) -> String {
     let (first, second) = def.hash.expect("called `hashed_path_of`, but `def.hash` is None");
