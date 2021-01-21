@@ -6,3 +6,7 @@ html, body {
 body {
     background-color: lightblue;
 }
+
+div::after {
+    content: "{{: var:should_not_be_replaced :}}";
+}

@@ -8,11 +8,12 @@ const ASSETS: reinda::Setup  = reinda::assets! {
     "index.html": { template },
     "bundle.js": {
         hash,
+        template,
         append: "//# sourceMappingURL={{: path:bundle.js.map :}}",
     },
     "bundle.js.map": { hash },
 
-    "style.css": { template, serve: false },
+    "style.css": { serve: false },
 };
 
 #[tokio::main]
