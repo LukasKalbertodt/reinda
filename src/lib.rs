@@ -1,3 +1,87 @@
+//! This library helps with easily including and serving assets (like JS or CSS
+//! files) in your web application. It is fairly configurable and supports a
+//! variety of features. In particular, it can embed all assets into your
+//! executable at compile to get an easy to deploy standalone-executable.
+//!
+//! # Quick start
+//!
+//! To use `reinda`, you mostly need to do three things: (1) define your assets
+//! with [`assets!`], (2) create an [`Assets`] instance, (3) call
+//! [`Assets::get`] to serve your asset.
+//!
+//! ```no_run
+//! use reinda::{assets, Assets, Config, Setup};
+//!
+//! const ASSETS: Setup = assets! {
+//!     // Folder which contains your assets, relative to your `Cargo.toml`.
+//!     #![base_path = "assets"]
+//!
+//!     // List of assets to include, with different settings.
+//!     "index.html": { template },
+//!     "bundle.js": { hash },
+//! }
+//!
+//! // Initialize assets
+//! let assets = Assets::new(ASSETS, Config::default());
+//!
+//! // Retrieve specific asset. You can now send this data via HTTP.
+//! let bytes = assets.get("index.html");
+//! ```
+//!
+//! The `hash` keyword in the macro invocation means that `bundle.js` will be
+//! obtainable only with a filename that contains a hash of its content, e.g.
+//! `whS3Hn7q-bundle.js`. This is useful for caching on the web: you can now
+//! serve the `bundle.js` with a very large `max-age` in the `cache-control`
+//! header. Whenever your asset changes, the URI changes as well, so the browser
+//! has to re-request it.
+//!
+//! But how do you include the correct JS bundle path in your HTML file? That's
+//! what `template` is for. `reinda` supports a very basic templating. If you
+//! define your HTML file like this:
+//!
+//! ```text
+//! <html>
+//!   <head>
+//!     <script type="application/javascript" src="{{: path:bundle.js :}}" />
+//!   </head>
+//!   <body></body>
+//! </html>
+//! ```
+//!
+//! Then the `{{: ... :}}` part will be replaced by the actual, hashed path of
+//! `bundle.js`. There are more uses for the template, as you can see below.
+//!
+//!
+//! # Embed or not to embed: dev vs. prod mode
+//!
+//! TODO
+//!
+//!
+//! # Asset specification with `assets!`
+//!
+//! TODO
+//!
+//!
+//! # Template
+//!
+//! TODO
+//!
+//!
+//! # Notes, Requirements and Limitations
+//!
+//! - `reinda` actually consists of three crates: `reinda-core`, `reinda-macros`
+//!   and the main crate. To detect whether Cargo compiles in debug or release
+//!   mode, `cfg(debug_assertions)` is used. All three of these crates have to
+//!   be compiled with with the same setting regarding debug assertions,
+//!   otherwise you will either see strange compile errors or strange runtime
+//!   behavior (no UB though). This shouldn't be a concern, as all crates in
+//!   your dependency graph are compiled with the same codegen settings, unless
+//!   you include per-dependency overrides in your `Cargo.toml`. So just don't
+//!   do that.
+//! - The environment variable `CARGO_MANIFEST_DIR` has to be set when expanding
+//!   the `assets!` macro. Cargo does this automatically. But if you, for some
+//!   reason, compile manually with `rustc`, you have to set that value.
+
 use std::{collections::HashMap, path::PathBuf};
 use bytes::Bytes;
 
