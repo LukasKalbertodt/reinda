@@ -39,6 +39,10 @@ impl Resolver {
         for (id, asset_def) in setup.assets.iter().enumerate() {
             let id = AssetId(id as u32);
 
+            // Explicitly add asset to graph, regardless on whether it has
+            // dependencies or depends on anything else.
+            resolver.graph.add_asset(id);
+
             let raw_bytes = if asset_def.dynamic {
                 load_raw_from_fs(id, setup, config).await?
             } else {
@@ -60,9 +64,13 @@ impl Resolver {
         setup: &Setup,
         config: &Config,
     ) -> Result<Resolver, Error> {
+        // Create new resolver and already register the requested file in the
+        // graph.
+        let mut resolver = Resolver::new();
+        resolver.graph.add_asset(asset_id);
+
         // Load the raw content of the requested files and all files recursively
         // included by it.
-        let mut resolver = Resolver::new();
         let mut stack = vec![asset_id];
         while let Some(id) = stack.pop() {
             // If we already loaded this file, skip it. Asset IDs might be added

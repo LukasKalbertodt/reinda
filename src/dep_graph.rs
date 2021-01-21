@@ -20,6 +20,14 @@ impl DepGraph {
         Self(AHashMap::new())
     }
 
+    /// Explicitly adds an asset to the graph. This makes sure this asset is
+    /// included in the topological sort. It is as if it would register an
+    /// external dependency on `id`. Assets are automatically created when you
+    /// call `add_dependency`.
+    pub(crate) fn add_asset(&mut self, id: AssetId) {
+        self.0.entry(id).or_default();
+    }
+
     /// Adds one edge to this graph: `depender` depends on `dependee`.
     pub(crate) fn add_dependency(&mut self, depender: AssetId, dependee: AssetId) {
         self.0.entry(depender).or_default().dependencies.insert(dependee);
