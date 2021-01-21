@@ -8,6 +8,7 @@ use reinda_core::{
 };
 use crate::{
     Config, Error, Setup,
+    hash,
     dep_graph::DepGraph,
 };
 
@@ -92,9 +93,9 @@ impl Resolver {
         self,
         setup: &Setup,
         config: &Config,
-        mut public_path_of: impl FnMut(AssetId) -> &'a str,
-    ) -> Result<AHashMap<AssetId, Bytes>, Error> {
+    ) -> Result<ResolveResult, Error> {
         let Resolver { mut resolved, mut unresolved, graph } = self;
+        let mut public_paths: AHashMap<AssetId, String> = AHashMap::new();
 
         // We sort the include graph topologically such that we never have to
         // deal with an unresolved include.
@@ -104,51 +105,60 @@ impl Resolver {
         })?;
 
         for id in assets {
-            let template = match unresolved.remove(&id) {
-                // If `id` is ont in `unresolved`, it is already resolved and
-                // we can skip it.
-                None => continue,
-                Some(template) => template,
-            };
+            let def = setup.def(id);
 
-            let path = setup.def(id).path;
-            let rendered = template.render(|fragment, mut appender| -> Result<_, Error> {
-                match fragment {
-                    Fragment::Path(p) => {
-                        let id = setup.path_to_id(&p)
-                            .ok_or_else(|| Error::UnresolvedPath {
-                                in_file: path.into(),
-                                referenced: p.into(),
-                            })?;
+            // If `id` is not in `unresolved`, it is already resolved and we can
+            // skip resolving it.
+            if let Some(template) = unresolved.remove(&id) {
+                let path = def.path;
+                let rendered = template.render(|fragment, mut appender| -> Result<_, Error> {
+                    match fragment {
+                        Fragment::Include(p) => {
+                            // Regarding `unwrap` and `expect`: see method
+                            // preconditions.
+                            let id = setup.path_to_id(&p).unwrap();
+                            let data = resolved.get(&id)
+                                .expect("missing include in `Assets::resolve`");
 
-                        appender.append(public_path_of(id).as_bytes());
+                            appender.append(&data);
+                        }
+                        Fragment::Path(p) => {
+                            let reference_id = setup.path_to_id(&p)
+                                .expect("missing path reference in `Assets::resolve`");
+                            let public_path = public_paths.get(&reference_id)
+                                .map(|s| &**s)
+                                .unwrap_or(setup.def(reference_id).path);
+
+                            appender.append(public_path.as_bytes());
+                        }
+                        Fragment::Var(key) => {
+                            let value = config.variables.get(&key)
+                                .ok_or_else(|| Error::MissingVariable {
+                                    key: key.into(),
+                                    file: path.into(),
+                                })?;
+                            appender.append(value.as_bytes());
+                        }
                     }
-                    Fragment::Include(path) => {
-                        // Regarding `unwrap` and `expect`: see method
-                        // preconditions.
-                        let id = setup.path_to_id(&path).unwrap();
-                        let data = resolved.get(&id)
-                            .expect("missing include in `Assets::resolve`");
 
-                        appender.append(&data);
-                    }
-                    Fragment::Var(key) => {
-                        let value = config.variables.get(&key)
-                            .ok_or_else(|| Error::MissingVariable {
-                                key: key.into(),
-                                file: path.into(),
-                            })?;
-                        appender.append(value.as_bytes());
-                    }
-                }
+                    Ok(())
+                })?;
 
-                Ok(())
-            })?;
+                resolved.insert(id, rendered);
+            }
 
-            resolved.insert(id, rendered);
+            // If a hashed filename is requested, calculate that filename so
+            // that subsequent assets can use it.
+            if def.hashed_filename() {
+                let hashed = hash::hashed_path_of(def.path, &resolved[&id]);
+                public_paths.insert(id, hashed);
+            }
         }
 
-        Ok(resolved)
+        Ok(ResolveResult {
+            assets: resolved,
+            public_paths,
+        })
     }
 
     fn add_raw(
@@ -165,16 +175,13 @@ impl Resolver {
                 self.resolved.insert(asset_id, resolved);
             }
             Err(template) => {
-                // Go through all includes and add them to our graph.
-                let includes = template.fragments().filter_map(|f| f.as_include());
-                for include_path in includes {
-                    let includee_id = setup.path_to_id(&include_path)
-                        .ok_or_else(|| Error::UnresolvedInclude {
-                            in_file: setup.def(asset_id).path.into(),
-                            included: include_path.into(),
-                        })?;
-
-                    self.graph.add_dependency(asset_id, includee_id);
+                // Go through all fragments to find dependencies of this asset
+                // and add those to the graph.
+                for fragment in template.fragments() {
+                    let dep = dependency_in_fragment(fragment, asset_id, setup)?;
+                    if let Some(dep) = dep {
+                        self.graph.add_dependency(asset_id, dep);
+                    }
                 }
 
                 self.unresolved.insert(asset_id, template);
@@ -182,6 +189,51 @@ impl Resolver {
         }
 
         Ok(())
+    }
+}
+
+pub(crate) struct ResolveResult {
+    pub(crate) assets: AHashMap<AssetId, Bytes>,
+
+    #[cfg_attr(debug_assertions, allow(dead_code))]
+    pub(crate) public_paths: AHashMap<AssetId, String>,
+}
+
+/// Checks if the given fragment contains a dependency to another asset. If so,
+/// returns `Some(_)`, `None` otherwise.
+fn dependency_in_fragment(
+    fragment: &Fragment,
+    parent: AssetId,
+    setup: &Setup,
+) -> Result<Option<AssetId>, Error> {
+    match fragment {
+        Fragment::Include(p) => {
+            setup.path_to_id(&p)
+                .ok_or_else(|| Error::UnresolvedInclude {
+                    in_file: setup.def(parent).path.into(),
+                    included: p.into(),
+                })
+                .map(Some)
+        }
+
+        Fragment::Path(p) => {
+            let referee_id = setup.path_to_id(p)
+                .ok_or_else(|| Error::UnresolvedPath {
+                    in_file: setup.def(parent).path.into(),
+                    referenced: p.into(),
+                })?;
+
+            // If the referenced asset has a hashed file, this is considered a
+            // dependency of `parent`. We first have to load `referee` to
+            // caculate its hash to insert the correct path into `parent`.
+            if setup.def(referee_id).hashed_filename() {
+                Ok(Some(referee_id))
+            } else {
+                Ok(None)
+            }
+        }
+
+        _ => Ok(None),
     }
 }
 

@@ -8,6 +8,7 @@ use reinda_core::template;
 use crate::resolve::Resolver;
 
 mod dep_graph;
+mod hash;
 mod resolve;
 
 
@@ -145,7 +146,7 @@ pub struct Assets {
     /// Stores the hashed paths of assets. This contains entries for hashed
     /// paths only; assets without `hash` are not present here.
     #[cfg(not(debug_assertions))]
-    hashed_paths: AHashMap<AssetId, String>,
+    public_paths: AHashMap<AssetId, String>,
 
     /// Stores the actual asset data. The key is the public path. So this is
     /// basically the whole implementation of `Assets::get` in prod mode.
@@ -195,7 +196,7 @@ impl Assets {
     pub fn public_path_of(&self, id: AssetId) -> &str {
         #[cfg(not(debug_assertions))]
         {
-            if let Some(s) = self.hashed_paths.get(&id) {
+            if let Some(s) = self.public_paths.get(&id) {
                 return s;
             }
         }
@@ -217,17 +218,25 @@ impl Assets {
     /// Implementation of `new` for prod builds.
     #[cfg(not(debug_assertions))]
     async fn new_impl(setup: Setup, config: Config) -> Result<Self, Error> {
+        use crate::resolve::ResolveResult;
+
         let resolver = Resolver::for_all_assets(&setup, &config).await?;
-        // TODO: hashing
-        let resolved = resolver.resolve(&setup, &config, |id| setup.def(id).path)?;
-        let assets = resolved.into_iter()
-            .map(|(id, bytes)| (setup.def(id).path.into(), bytes))
+        let ResolveResult { assets, public_paths } = resolver.resolve(&setup, &config)?;
+
+        let assets = assets.into_iter()
+            .map(|(id, bytes)| {
+                let public_path = public_paths.get(&id)
+                    .map(|s| &**s)
+                    .unwrap_or(setup.def(id).path)
+                    .into();
+                (public_path, bytes)
+            })
             .collect();
 
         Ok(Self {
             setup,
             config,
-            hashed_paths: AHashMap::new(), // TODO: hashing
+            public_paths,
             assets,
         })
     }
@@ -244,8 +253,8 @@ impl Assets {
         let setup = &self.setup;
         let config = &self.config;
         let resolver = Resolver::for_single_asset_from_fs(start_id, setup, config).await?;
-        let resolved = resolver.resolve(setup, config, |id| setup.def(id).path)?;
-        let out = {resolved}.remove(&start_id)
+        let resolved = resolver.resolve(setup, config)?;
+        let out = {resolved.assets}.remove(&start_id)
             .expect("resolver did not contain requested file");
 
         Ok(Some(out))

@@ -60,3 +60,12 @@ pub struct AssetDef {
     #[cfg(not(debug_assertions))]
     pub content: &'static [u8],
 }
+
+impl AssetDef {
+    /// Returns whether or not this asset's filename should include a hash. In
+    /// prod mode, this returns `self.hash`, in dev mode this always returns
+    /// `false`.
+    pub fn hashed_filename(&self) -> bool {
+        self.hash && cfg!(not(debug_assertions))
+    }
+}
