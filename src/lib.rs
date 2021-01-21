@@ -234,6 +234,7 @@ impl Assets {
         let ResolveResult { assets, public_paths } = resolver.resolve(&setup, &config)?;
 
         let assets = assets.into_iter()
+            .filter(|(id, _)| setup.def(*id).serve)
             .map(|(id, bytes)| {
                 let public_path = public_paths.get(&id)
                     .map(|s| &**s)
@@ -255,16 +256,20 @@ impl Assets {
     /// paths. This is the dev-build implementation of `Assets::get`.
     #[cfg(debug_assertions)]
     async fn load_from_fs(&self, start_path: &str) -> Result<Option<Bytes>, Error> {
-        let start_id = match self.setup.path_to_id(start_path) {
+        let id = match self.setup.path_to_id(start_path) {
             None => return Ok(None),
             Some(id) => id,
         };
 
         let setup = &self.setup;
         let config = &self.config;
-        let resolver = Resolver::for_single_asset_from_fs(start_id, setup, config).await?;
+        if !self.setup.def(id).serve {
+            return Ok(None);
+        }
+
+        let resolver = Resolver::for_single_asset_from_fs(id, setup, config).await?;
         let resolved = resolver.resolve(setup, config)?;
-        let out = {resolved.assets}.remove(&start_id)
+        let out = {resolved.assets}.remove(&id)
             .expect("resolver did not contain requested file");
 
         Ok(Some(out))
