@@ -3,6 +3,7 @@
 //! variety of features. In particular, it can embed all assets into your
 //! executable at compile to get an easy to deploy standalone-executable.
 //!
+//!
 //! # Quick start
 //!
 //! To use `reinda`, you mostly need to do three things: (1) define your assets
@@ -19,52 +20,145 @@
 //!     // List of assets to include, with different settings.
 //!     "index.html": { template },
 //!     "bundle.js": { hash },
+//! };
+//!
+//!
+//! #[tokio::main]
+//! async fn main() -> Result<(), reinda::Error> {
+//!     // Initialize assets
+//!     let assets = Assets::new(ASSETS, Config::default()).await?;
+//!
+//!     // Retrieve specific asset. You can now send this data via HTTP or use
+//!     // it however you like.
+//!     let bytes: /* Option<bytes::Bytes> */ = assets.get("index.html")?;
+//!
+//!     Ok(())
 //! }
-//!
-//! // Initialize assets
-//! let assets = Assets::new(ASSETS, Config::default());
-//!
-//! // Retrieve specific asset. You can now send this data via HTTP.
-//! let bytes = assets.get("index.html");
 //! ```
 //!
 //! The `hash` keyword in the macro invocation means that `bundle.js` will be
 //! obtainable only with a filename that contains a hash of its content, e.g.
-//! `whS3Hn7q-bundle.js`. This is useful for caching on the web: you can now
+//! `bundle.JdeK1YeQ90aJ.js`. This is useful for caching on the web: you can now
 //! serve the `bundle.js` with a very large `max-age` in the `cache-control`
 //! header. Whenever your asset changes, the URI changes as well, so the browser
 //! has to re-request it.
 //!
 //! But how do you include the correct JS bundle path in your HTML file? That's
-//! what `template` is for. `reinda` supports a very basic templating. If you
+//! what `template` is for. `reinda` supports very basic templating. If you
 //! define your HTML file like this:
 //!
 //! ```text
 //! <html>
-//!   <head>
-//!     <script type="application/javascript" src="{{: path:bundle.js :}}" />
-//!   </head>
-//!   <body></body>
+//!   <head></head>
+//!   <body>
+//!     <script src="{{: path:bundle.js :}}" />
+//!   </body>
 //! </html>
 //! ```
 //!
 //! Then the `{{: ... :}}` part will be replaced by the actual, hashed path of
 //! `bundle.js`. There are more uses for the template, as you can see below.
 //!
+//! To learn more about this library, keep reading, or check out the docs for
+//! [`assets!`] for information on asset specification, or checkout [`Config`]
+//! for information about runtime configuration.
 //!
-//! # Embed or not to embed: dev vs. prod mode
 //!
-//! TODO
+//! # Embed or loaded at runtime: dev vs. prod mode
+//!
+//! This library has two different modes: **dev** (short for development) and
+//! **prod** (short for production). The name "prod" is deliberately not the
+//! same as "release" (the typical Rust term for it), because those two are not
+//! always the same.
+//!
+//! There are several differences between the two modes:
+//!
+//! |   | dev mode | prod mode |
+//! | - | -------- | --------- |
+//! | Normal assets | Loaded from filesystem when requested | Embedded into binary |
+//! | `dynamic: true` assets | Loaded from filesystem when requested | Loaded in [`Assets::new`] |
+//! | `hash: true` assets | filename not modified | hash inserted into filename |
+//! | Base path | `config.base_path` with current workdir as fallback | Given via `#![base_path]` |
 //!
 //!
-//! # Asset specification with `assets!`
-//!
-//! TODO
+//! By default, if you compile in Cargo dev/debug mode (e.g. `cargo build`),
+//! *dev* mode is used. If you compile in Cargo's release mode (e.g. `cargo
+//! build --release`), *prod* mode is used. (TODO: make it possible to use prod
+//! in debug mode).
 //!
 //!
 //! # Template
 //!
-//! TODO
+//! `reinda` has a simple template system. The input file is checked for
+//! "fragments" which have the syntax `{{: foo :}}`. The start token is actually
+//! `{{: ` (note the whitespace!). So `{{:foo:}}` is not recognized as fragment.
+//! The syntax was chosen to not conflict with other template syntax that might
+//! be present in the asset files. Please let me know if some other template
+//! engine out there uses the `{{:` syntax! Then I might change the syntax of
+//! `reinda`.
+//!
+//! Inside a fragment, there are different replacement functions you can use:
+//!
+//! - **`include:`** allows you to include the content of another file in place
+//!   of the template fragment. If the included file is a template as well, that
+//!   will be rendered before being included. Example:
+//!   `{{: include:colors.css }}`.
+//!
+//! - **`path:`** replaces the fragment with the potential hashed path of
+//!   another asset. This only makes sense for hashed asset paths as otherwise
+//!   you could just insert the path directly. Example:
+//!   `{{: path:bundle.js :}}`.
+//!
+//! - **`var:`** replaces the fragment with a runtime provided variable. See
+//!   [`Config::variables`]. Example: `{{: var:main-color :}}`.
+//!
+//! Fragments have two other intended limitations: they must not contain a
+//! newline and must not be longer than 256 characters. This is to further
+//! prevent the template accidentally picking up start tokens that are not
+//! intended for `reinda`.
+//!
+//!
+//! ### Example
+//!
+//! **`index.html`**:
+//!
+//! ```text
+//! <html>
+//!   <head>
+//!     <script type="application/json">{ "accentColor": "{{: var:color :}}" }</script>
+//!     <style>{{: include:style.css :}}</style>
+//!   </head>
+//!   <body>
+//!     <script src="{{: path:bundle.js :}}" />
+//!   </body>
+//! </html>
+//! ```
+//!
+//! **`style.css`**
+//!
+//! ```text
+//! body {
+//!   margin: 0;
+//! }
+//! ```
+//!
+//! And assuming `bundle.js` was declared with `hash` (to hash its filename) and
+//! the `config.variables` contained the entry `"color": "blue"`, then the
+//! resulting `index.html` looks like this:
+//!
+//! ```text
+//! <html>
+//!   <head>
+//!     <script type="application/json">{ "accentColor": "blue" }</script>
+//!     <style>body {
+//!   margin: 0;
+//! }</style>
+//!   </head>
+//!   <body>
+//!     <script src="bundle.JdeK1YeQ90aJ.js" />
+//!   </body>
+//! </html>
+//! ```
 //!
 //!
 //! # Notes, Requirements and Limitations
@@ -171,10 +265,10 @@ mod resolve;
 ///   as a dynamic asset which has to be loaded at runtime and cannot be
 ///   embedded. In dev mode, the asset is loaded on each [`Assets::get`] (like
 ///   all other assets); in prod mode, it is loaded from the file system in
-///   `Assets::new`.
+///   [`Assets::new`].
 ///
-/// - **`hash`** (optional pair of strings): see section about hashed filenames
-///   below.
+/// - **`hash`** (optional pair of strings, disabled by default): see section
+///   about hashed filenames below.
 ///
 /// - **`prepend`/`append`** (optional string, default: `None`): if specified, a
 ///   fixed string is prepended or appended to the included asset before any
@@ -184,13 +278,13 @@ mod resolve;
 /// ### Hashed filename
 ///
 /// If `hash` is specified for an asset, a hash of the asset's contents are
-/// included intoits filename.[`Assets::get`] won't serve it with the path you
+/// included into its filename. [`Assets::get`] won't serve it with the path you
 /// specified in this macro, but with a path that includes a hash. Filename
 /// hashing is disable in dev mode.
 ///
 /// By default, the hash (and an additional `.`) will be inserted before the
 /// first `.` in the filename of the asset's path. If that filename does not
-/// contain a `.`, a `-` and the hash is appeneded to the filename. For
+/// contain a `.`, a `-` and the hash is appended to the filename. For
 /// example:
 ///
 /// - `sub/main.js.map` → `sub/main.JdeK1YeQ90aJ.js.map`
@@ -246,7 +340,9 @@ pub struct Config {
     /// A list of path overrides for specific non-embedded assets. The key is
     /// the asset path you specified in [`assets!`] and the value is a path to
     /// that specific asset. This override is then used instead of
-    /// `self.base_path.join(asset_path)`.
+    /// `self.base_path.join(asset_path)`. If the override is a relative path,
+    /// it's relative to the current working directory.
+    // TODO: mention they are just for `dynamic` assets
     pub path_overrides: HashMap<String, PathBuf>,
 }
 
@@ -348,6 +444,9 @@ impl Assets {
     #[cfg(not(debug_assertions))]
     async fn new_impl(setup: Setup, config: Config) -> Result<Self, Error> {
         use crate::resolve::ResolveResult;
+
+        // TODO: check that no path_overrides are given for embedded assets.
+        // Error otherwise.
 
         let resolver = Resolver::for_all_assets(&setup, &config).await?;
         let ResolveResult { assets, public_paths } = resolver.resolve(&setup, &config)?;
