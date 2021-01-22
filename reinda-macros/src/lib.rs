@@ -147,6 +147,10 @@ fn embed(
     base: Option<&str>,
     asset: &Asset,
 ) -> Result<TokenStream, syn::Error> {
+    if asset.settings.dynamic {
+        return Ok(quote! { b"" });
+    }
+
     let path = match base {
         Some(base) => {
             let manifest = std::env::var("CARGO_MANIFEST_DIR")
