@@ -1,8 +1,16 @@
 [package]
 name = "reinda-macros"
-version = "0.1.0"
+version = "0.0.1"
 authors = ["Lukas Kalbertodt <lukas.kalbertodt@gmail.com>"]
 edition = "2018"
+
+description = """
+Internal crate for `reinda`. Do not use this crate directly! See the main
+crate for more information.
+"""
+repository = "https://github.com/LukasKalbertodt/reinda/"
+license = "MIT/Apache-2.0"
+
 
 [lib]
 proc-macro = true
@@ -16,5 +24,4 @@ quote = "1"
 [dependencies.syn]
 version = "1"
 default-features = false
-# TODO: remove extra-traits
-features = ["parsing", "proc-macro", "clone-impls", "extra-traits", "derive", "printing"]
+features = ["parsing", "proc-macro", "derive", "printing"]
