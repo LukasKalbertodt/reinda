@@ -1,20 +1,19 @@
-# `reinda`: easily embed and manage assets in your web application
+# `reinda`: easily embed and manage assets
 
 [<img alt="CI status of master" src="https://img.shields.io/github/workflow/status/LukasKalbertodt/reinda/CI/master?label=CI&logo=github&logoColor=white&style=for-the-badge" height="23">](https://github.com/LukasKalbertodt/reinda/actions?query=workflow%3ACI+branch%3Amaster)
 [<img alt="Crates.io Version" src="https://img.shields.io/crates/v/reinda?logo=rust&style=for-the-badge" height="23">](https://crates.io/crates/reinda)
 [<img alt="docs.rs" src="https://img.shields.io/crates/v/reinda?color=blue&label=docs&style=for-the-badge" height="23">](https://docs.rs/reinda)
 
 This library helps you manage your assets (external files) and is mostly
-intended for web applications. Assets can be embedded into the binary file to
-obtain an easy to deploy standalone executable. This crate also offers a
+intended to be used in web applications. Assets can be embedded into the binary
+file to obtain an easy to deploy standalone executable. This crate also offers a
 template engine and the ability to automatically include a hash of an asset's
 content into its filename (useful for caching on the web). In release mode, this
-crate prepare everything up-front such that the actually serving the file via
+crate prepares everything up-front such that the actually serving the file via
 HTTP can be as fast as possible.
 
 You might know the crate `rust-embed`: `reinda` does basically the same, but for
-the most part has more features, is more flexible (in my opinion) and has a few
-other advantages.
+the most part has more features and is more flexible (in my opinion).
 
 **Tiny example**:
 
@@ -31,9 +30,8 @@ const ASSETS: Setup = assets! {
 
 let assets = Assets::new(ASSETS, Config::default()).await?;
 
-// Retrieve specific asset. You can now send this data via HTTP or use it
-// however you like.
-let bytes: /* Option<bytes::Bytes> */ = assets.get("index.html")?;
+// Retrieve specific asset. You can now send this data via HTTP or use it however you like.
+let bytes /* : Option<bytes::Bytes> */ = assets.get("index.html")?;
 ```
 
 See [**the documentation**](https://docs.rs/reinda) for more information.
