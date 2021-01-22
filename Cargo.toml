@@ -20,8 +20,8 @@ exclude = [".github"]
 
 [dependencies]
 ahash = "0.6"
-reinda-core = { version = "=0.0.1", path = "reinda-core" }
-reinda-macros = { version = "=0.0.1", path = "reinda-macros" }
+reinda-core = { version = "=0.0.1", path = "core" }
+reinda-macros = { version = "=0.0.1", path = "macros" }
 base64 = "0.13"
 bytes = "1"
 sha2 = "0.9"

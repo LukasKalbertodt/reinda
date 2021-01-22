@@ -17,7 +17,7 @@ proc-macro = true
 
 
 [dependencies]
-reinda-core = { path = "../reinda-core" }
+reinda-core = { path = "../core" }
 proc-macro2 = "1"
 quote = "1"
 
