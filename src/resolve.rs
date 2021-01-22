@@ -255,10 +255,14 @@ async fn load_raw_from_fs(
     config: &Config,
 ) -> Result<Bytes, Error> {
     let def = setup.def(id);
-    let base = config.base_path.as_deref()
-        .unwrap_or(Path::new(setup.base_path));
-    let path = base.join(def.path);
-
+    let path =  match config.path_overrides.get(def.path) {
+        Some(p) => p.clone(),
+        None => {
+            config.base_path.as_deref()
+                .unwrap_or(Path::new(setup.base_path))
+                .join(def.path)
+        }
+    };
 
     let mut out = Vec::new();
     if let Some(prepend) = def.prepend {

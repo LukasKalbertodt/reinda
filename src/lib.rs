@@ -230,7 +230,8 @@ pub use reinda_core::{AssetDef, AssetId, PathToIdMap};
 /// Runtime configuration.
 #[derive(Debug, Clone, Default)]
 pub struct Config {
-    /// The base path from which all assets are loaded. *Default*: `None`.
+    /// The base path from which all non-embedded assets are loaded. *Default*:
+    /// `None`.
     ///
     /// The per-asset paths you defined in the `asset!` invocation are prepended
     /// by this path. This path can be absolute or relative. If this is not
@@ -241,6 +242,12 @@ pub struct Config {
     ///
     /// These can be inserted into assets via `{{: var:foo :}}`.
     pub variables: HashMap<String, String>,
+
+    /// A list of path overrides for specific non-embedded assets. The key is
+    /// the asset path you specified in [`assets!`] and the value is a path to
+    /// that specific asset. This override is then used instead of
+    /// `self.base_path.join(asset_path)`.
+    pub path_overrides: HashMap<String, PathBuf>,
 }
 
 /// A set of assets.
