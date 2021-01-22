@@ -30,7 +30,7 @@
 //!
 //!     // Retrieve specific asset. You can now send this data via HTTP or use
 //!     // it however you like.
-//!     let bytes: /* Option<bytes::Bytes> */ = assets.get("index.html")?;
+//!     let bytes /*: Option<bytes::Bytes> */ = assets.get("index.html").await?;
 //!
 //!     Ok(())
 //! }
