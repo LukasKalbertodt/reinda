@@ -411,8 +411,11 @@ pub type GetError = std::convert::Infallible;
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum Error {
-    #[error("IO error")]
-    Io(#[from] std::io::Error),
+    #[error("IO error while accessing '{path}'")]
+    Io {
+        err: std::io::Error,
+        path: PathBuf,
+    },
 
     #[error("template error in '{file}': {err}")]
     Template {

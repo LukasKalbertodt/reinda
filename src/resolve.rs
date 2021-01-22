@@ -265,8 +265,10 @@ async fn load_raw_from_fs(
         out.extend_from_slice(prepend.as_bytes());
     }
 
-    let mut file = tokio::fs::File::open(path).await?;
-    file.read_to_end(&mut out).await?;
+    let mut file = tokio::fs::File::open(&path).await
+        .map_err(|err| Error::Io { err, path: path.clone() })?;
+    file.read_to_end(&mut out).await
+        .map_err(|err| Error::Io { err, path: path.clone() })?;
 
     if let Some(append) = def.append {
         out.extend_from_slice(append.as_bytes());

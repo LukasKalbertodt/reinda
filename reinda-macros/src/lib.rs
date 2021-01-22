@@ -164,11 +164,11 @@ fn embed(
 
     // Read the full file.
     let mut file = File::open(&path).map_err(|e| {
-        let msg = format!("could not open '{}': {}", asset.path, e);
+        let msg = format!("could not open '{}': {}", path, e);
         syn::Error::new(asset.path_span, msg)
     })?;
     file.read_to_end(&mut data).map_err(|e| {
-        let msg = format!("could not read '{}': {}", asset.path, e);
+        let msg = format!("could not read '{}': {}", path, e);
         syn::Error::new(asset.path_span, msg)
     })?;
 
