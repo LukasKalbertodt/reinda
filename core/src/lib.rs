@@ -4,8 +4,12 @@ pub mod template;
 
 
 /// Simple ID to refer to one asset in a `Setup` or `Assets` struct.
+///
+/// **Note**: the field of this struct is public such that it can be created by
+/// the `assets!` macro. However, you must not create instances of `AssetId`
+/// yourself or access this field.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct AssetId(pub u32);
+pub struct AssetId(#[doc(hidden)] pub u32);
 
 // See documentation in the main crate.
 #[derive(Debug, Clone, Copy)]
