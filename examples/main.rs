@@ -27,7 +27,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let assets = Assets::new(ASSETS, config).await?;
 
     for asset_id in assets.asset_ids() {
-        let info = assets.asset_info(asset_id).unwrap();
+        let info = assets.asset_info(asset_id);
         println!("########## {}", info.original_path());
         println!("# > public_path: {}", info.public_path());
         println!("# > serve: {}", info.is_served());

@@ -425,10 +425,11 @@ impl Assets {
         (0..self.setup.assets.len()).map(|i| AssetId(i as u32))
     }
 
-    /// Returns meta information about a specific asset, or `None` if no asset
-    /// with the given ID exists.
-    pub fn asset_info(&self, id: AssetId) -> Option<Info<'_>> {
-        let def = self.setup.assets.get(id.0 as usize)?;
+    /// Returns meta information about a specific asset. Panics if no asset with
+    /// the given ID exists.
+    pub fn asset_info(&self, id: AssetId) -> Info<'_> {
+        let def = self.setup.assets.get(id.0 as usize)
+            .expect("Assets::asset_info: no asset with the given ID exists");
         let public_path = {
             #[cfg(any(not(debug_assertions), feature = "debug_is_prod"))]
             {
@@ -441,7 +442,7 @@ impl Assets {
             }
         };
 
-        Some(Info { def, public_path })
+        Info { def, public_path }
     }
 }
 
