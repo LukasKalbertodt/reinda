@@ -9,7 +9,7 @@ const ASSETS: reinda::Setup  = reinda::assets! {
     "bundle.js": {
         hash,
         template,
-        append: "//# sourceMappingURL={{: path:bundle.js.map :}}",
+        append: b"//# sourceMappingURL={{: path:bundle.js.map :}}",
     },
     "bundle.js.map": { hash },
 

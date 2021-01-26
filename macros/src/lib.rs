@@ -107,27 +107,24 @@ fn run(input: TokenStream) -> Result<TokenStream, syn::Error> {
     })
 }
 
-#[derive(Debug)]
 struct Input {
     base_path: Option<String>,
     assets: Vec<Asset>,
 }
 
-#[derive(Debug)]
 struct Asset {
     path: String,
     path_span: Span,
     settings: AssetSettings,
 }
 
-#[derive(Debug)]
 struct AssetSettings {
     serve: bool,
     dynamic: bool,
     template: bool,
     hash: Option<Option<(String, String)>>,
-    append: Option<String>,
-    prepend: Option<String>,
+    append: Option<syn::LitByteStr>,
+    prepend: Option<syn::LitByteStr>,
 }
 
 impl Default for AssetSettings {
@@ -163,7 +160,7 @@ fn embed(
     // Start with the "prepend" data, if any.
     let mut data = Vec::new();
     if let Some(prepend) = &asset.settings.prepend {
-        data.extend_from_slice(prepend.as_bytes());
+        data.extend_from_slice(&prepend.value());
     }
 
     // Read the full file.
@@ -178,7 +175,7 @@ fn embed(
 
     // Add the "append" data, if any.
     if let Some(append) = &asset.settings.append {
-        data.extend_from_slice(append.as_bytes());
+        data.extend_from_slice(&append.value());
     }
 
     // Compress data if the feature is activated.
