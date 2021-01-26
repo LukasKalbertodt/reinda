@@ -1,8 +1,10 @@
 use std::{convert::TryInto, fs::File, io::Read, path::Path};
 
+use bytes::Bytes;
 use proc_macro::TokenStream as TokenStream1;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
+use reinda_core::template::{Fragment, Template};
 
 mod parse;
 
@@ -23,7 +25,7 @@ fn run(input: TokenStream) -> Result<TokenStream, syn::Error> {
     let mut match_arms = Vec::new();
     let mut asset_defs = Vec::new();
 
-    for asset in input.assets {
+    for asset in &input.assets {
         let path = &asset.path;
         let idx: u32 = match_arms.len().try_into().expect("you have more than 2^32 assets?!");
         match_arms.push(quote! {
@@ -69,7 +71,7 @@ fn run(input: TokenStream) -> Result<TokenStream, syn::Error> {
         let content_field = if cfg!(all(debug_assertions, not(feature = "debug_is_prod"))) {
             quote! {}
         } else {
-            let data = embed(input.base_path.as_deref(), &asset)?;
+            let data = embed(input.base_path.as_deref(), &asset, &input.assets)?;
             quote! { content: #data }
         };
 
@@ -143,6 +145,7 @@ impl Default for AssetSettings {
 fn embed(
     base: Option<&str>,
     asset: &Asset,
+    assets: &[Asset],
 ) -> Result<TokenStream, syn::Error> {
     if asset.settings.dynamic {
         return Ok(quote! { b"" });
@@ -178,6 +181,11 @@ fn embed(
         data.extend_from_slice(&append.value());
     }
 
+
+    // Data is fully assembled. We now already check the template.
+    check_template(&data, &asset.path, asset.path_span, assets)?;
+
+
     // Compress data if the feature is activated.
     #[cfg(feature = "compress")]
     {
@@ -199,4 +207,28 @@ fn embed(
             #lit
         }
     })
+}
+
+fn check_template(content: &[u8], path: &str, span: Span, assets: &[Asset]) -> Result<(), syn::Error> {
+    let template = Template::parse(Bytes::copy_from_slice(content)).map_err(|e| {
+        syn::Error::new(span, format!("failed to parse template '{}': {}", path, e))
+    })?;
+
+    for fragment in template.fragments() {
+        match fragment {
+            Fragment::Include(p) | Fragment::Path(p) => {
+                if !assets.iter().any(|a| &a.path == p) {
+                    let msg = format!(
+                        "template '{}' refers to '{}' via `include:` or `path:` but no such asset exists",
+                        path,
+                        p,
+                    );
+                    return Err(syn::Error::new(span, msg));
+                }
+            }
+            _ => {}
+        }
+    }
+
+    Ok(())
 }

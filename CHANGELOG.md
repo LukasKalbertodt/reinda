@@ -17,6 +17,7 @@ All notable changes to this project will be documented in this file.
 - Change `Assets::asset_info` to panic instead of returning `None`
 - Make filename hashing optional with Cargo-feature `hash` which is enabled by default
 - `prepend` and `append` now take byte string literals instead of normal string literal
+- Check template syntax and includes at compile time in prod mode.
 
 ### Fixed
 - Fix bug in filename hashing (forgot to add `/` between parents and file)

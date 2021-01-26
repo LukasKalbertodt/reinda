@@ -47,8 +47,8 @@ See [**the documentation**](https://docs.rs/reinda) for more information.
   - [x] Use runtime variables
 - [x] Compress embedded files to shrink the resulting binary
 - [x] Cargo feature to embed everything in debug mode
+- [x] Template syntax checked at compile time (in prod mode)
 - [ ] Well tested
-- [ ] Template syntax checked at compile time (in prod mode)
 
 
 ## Status of this project
