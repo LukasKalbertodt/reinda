@@ -1,15 +1,24 @@
-use std::path::Path;
-
 use bytes::Bytes;
 use reinda_core::AssetDef;
-use sha2::{Digest, Sha256};
 
 
-/// How many bytes of the 32 byte (256 bit) hash are used and encoded in the
-/// filename.
-const HASH_BYTES_IN_FILENAME: usize = 9;
+#[cfg(not(feature = "hash"))]
+pub(crate) fn hashed_path_of(_: &AssetDef, _: &Bytes) -> String {
+    // The `assets!` macro should error if an asset specifies `hash`.
+    unreachable!("`hash_path_of` called, but Cargo-feature 'hash' is disabled.");
+}
 
+
+#[cfg(feature = "hash")]
 pub(crate) fn hashed_path_of(def: &AssetDef, content: &Bytes) -> String {
+    use std::path::Path;
+    use sha2::{Digest, Sha256};
+
+    /// How many bytes of the 32 byte (256 bit) hash are used and encoded in the
+    /// filename.
+    const HASH_BYTES_IN_FILENAME: usize = 9;
+
+
     let (first, second) = def.hash.expect("called `hashed_path_of`, but `def.hash` is None");
 
     let mut out = String::new();

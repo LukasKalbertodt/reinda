@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - Make field of `AssetId` private
 - Change `Assets::asset_info` to panic instead of returning `None`
+- Make filename hashing optional with Cargo-feature `hash` which is enabled by default
 
 
 ## 0.1.0 - 2021-01-22
