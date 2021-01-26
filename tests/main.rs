@@ -35,6 +35,32 @@ async fn minimal() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[tokio::test]
+async fn subdir() -> Result<(), Box<dyn std::error::Error>> {
+    const ASSETS: reinda::Setup  = reinda::assets! {
+        #![base_path = "tests/files"]
+
+        "include_sub.txt": { template },
+        "sub/anna.txt": {},
+    };
+
+    let a = Assets::new(ASSETS, Config::default()).await?;
+
+    assert_eq!(a.asset_ids().count(), 2);
+    assert_get!(a.get("sub/anna.txt"), b"anna\n");
+    assert_get!(a.get("include_sub.txt"), b"My favorite human is: anna\n\n");
+
+    for id in a.asset_ids() {
+        let info = a.asset_info(id);
+        assert_eq!(info.public_path(), info.original_path());
+        assert_eq!(info.is_served(), true);
+        assert_eq!(info.is_dynamic(), false);
+        assert_eq!(info.is_filename_hashed(), false);
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn complex_includes() -> Result<(), Box<dyn std::error::Error>> {
     const ASSETS: reinda::Setup  = reinda::assets! {
         #![base_path = "tests/files/complex_includes"]
