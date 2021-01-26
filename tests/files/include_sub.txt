@@ -1,0 +1,1 @@
+My favorite human is: {{: include:sub/anna.txt :}}

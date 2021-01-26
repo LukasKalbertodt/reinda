@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::{collections::VecDeque, mem};
 use ahash::{AHashMap, AHashSet};
 
 use reinda_core::AssetId;
@@ -60,18 +60,19 @@ impl DepGraph {
             .collect();
 
         let mut pos = 0;
-        while let Some(&depender_id) = queue.get(pos) {
+        while let Some(&dependee_id) = queue.get(pos) {
             pos += 1;
-            while let Some(dependee_id) = {
-                // This is a strange workaround to make the compiler understand
-                // the `Drain` iterator can be dropped before the loop body.
-                let x = self.node_mut(depender_id).rev_dependencies.drain().next();
-                x
-            } {
-                let dependee = self.node_mut(dependee_id);
-                dependee.dependencies.remove(&depender_id);
-                if dependee.dependencies.is_empty() {
-                    queue.push_back(dependee_id);
+            let rev_deps = mem::take(&mut self.node_mut(dependee_id).rev_dependencies).into_iter();
+
+            for depender_id in rev_deps {
+                let depender = self.node_mut(depender_id);
+                let was_removed = depender.dependencies.remove(&dependee_id);
+                debug_assert!(was_removed);
+
+                // If we just removed the last dependency of `depender`, then it
+                // is now ready to be processed.
+                if depender.dependencies.is_empty() {
+                    queue.push_back(depender_id);
                 }
             }
         }

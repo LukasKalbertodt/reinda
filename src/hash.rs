@@ -25,7 +25,10 @@ pub(crate) fn hashed_path_of(def: &AssetDef, content: &Bytes) -> String {
 
     // First add the parent directory, if any.
     if let Some(parent) = Path::new(def.path).parent() {
-        out.push_str(parent.to_str().unwrap());
+        if parent.iter().count() > 0 {
+            out.push_str(parent.to_str().unwrap());
+            out.push('/');
+        }
     }
 
     // Next, the first part of the filename.
