@@ -8,8 +8,17 @@ pub mod template;
 /// **Note**: the field of this struct is public such that it can be created by
 /// the `assets!` macro. However, you must not create instances of `AssetId`
 /// yourself or access this field.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct AssetId(#[doc(hidden)] pub u32);
+
+// Manual implementation to easy debugging. In pretty print debug output, it
+// really does not make sense to put the field in its own line.
+impl fmt::Debug for AssetId {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "AssetId({})", self.0)
+    }
+}
+
 
 // See documentation in the main crate.
 #[derive(Debug, Clone, Copy)]
