@@ -9,6 +9,8 @@ All notable changes to this project will be documented in this file.
   ...) when compiling in debug mode, too.
 - `Info::is_filename_hashed`
 - `Assets::lookup`
+- Add Cargo-feature `compress` (enabled by default) to compress embedded data to
+  shrink binary size. Compression via `flate2`.
 
 ### Changed
 - Make field of `AssetId` private
