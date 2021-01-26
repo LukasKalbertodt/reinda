@@ -37,7 +37,7 @@ impl DepGraph {
     }
 
     /// Returns an iterator over all assets which `asset` directly depends on.
-    #[cfg(debug_assertions)] // only used in dev-builds
+    #[cfg(all(debug_assertions, not(feature = "debug_is_prod")))] // only used in dev-builds
     pub(crate) fn dependencies_of(&self, asset: AssetId) -> impl '_ + Iterator<Item = AssetId> {
         self.0.get(&asset)
             .map(|data| data.dependencies.iter().copied())

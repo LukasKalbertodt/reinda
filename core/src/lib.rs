@@ -59,7 +59,7 @@ pub struct AssetDef {
     pub append: Option<&'static str>,
     pub prepend: Option<&'static str>,
 
-    #[cfg(not(debug_assertions))]
+    #[cfg(any(not(debug_assertions), feature = "debug_is_prod"))]
     pub content: &'static [u8],
 }
 
@@ -68,6 +68,6 @@ impl AssetDef {
     /// prod mode, this returns `self.hash`, in dev mode this always returns
     /// `false`.
     pub fn hashed_filename(&self) -> bool {
-        self.hash.is_some() && cfg!(not(debug_assertions))
+        self.hash.is_some() && cfg!(any(not(debug_assertions), feature = "debug_is_prod"))
     }
 }
