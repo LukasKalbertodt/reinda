@@ -72,6 +72,13 @@ fn fields_to_settings(fields: Vec<Field>) -> Result<AssetSettings, syn::Error> {
         ))
     }
 
+    if asset.hash.is_some() && cfg!(not(feature = "hash")) {
+        return Err(syn::Error::new(
+            hash_span.unwrap(),
+            "asset has 'hash' specified, but 'hash' Cargo-feature is disabled",
+        ));
+    }
+
     Ok(asset)
 }
 

@@ -17,6 +17,7 @@ proc-macro = true
 
 [features]
 debug_is_prod = ["reinda-core/debug_is_prod"]
+hash = []
 
 [dependencies]
 reinda-core = { version = "=0.0.1", path = "../core" }
