@@ -122,13 +122,110 @@ async fn cyclic_include() -> Result<(), Box<dyn std::error::Error>> {
         assert_correct_error(e);
     }
 
-
+    // Dev
     #[cfg(all(debug_assertions, not(feature = "debug_is_prod")))]
     {
         let a = Assets::new(ASSETS, Config::default()).await?;
         assert_correct_error(a.get("a.txt").await.unwrap_err());
         assert_correct_error(a.get("b.txt").await.unwrap_err());
         assert_correct_error(a.get("c.txt").await.unwrap_err());
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg(feature = "hash")]
+async fn use_case_web() -> Result<(), Box<dyn std::error::Error>> {
+    use std::collections::HashMap;
+
+    const ASSETS: reinda::Setup  = reinda::assets! {
+        #![base_path = "tests/files/use_case_web"]
+
+        "index.html": { template },
+        "bundle.js": {
+            template,
+            hash,
+            append: "//# sourceMappingURL=/{{: path:bundle.js.map :}}"
+        },
+        "bundle.js.map": { hash },
+
+        "logo.svg": { hash, dynamic },
+
+        "fonts.css": {
+            template,
+            serve: false,
+        },
+
+        "fonts/comic-sans.woff2": { hash },
+    };
+
+    let mut variables = HashMap::new();
+    variables.insert("banana".into(), "Yummy food".into());
+    let config = Config {
+        variables,
+        .. Config::default()
+    };
+    let a = Assets::new(ASSETS, config).await?;
+
+
+
+    // Prod
+    #[cfg(any(not(debug_assertions), feature = "debug_is_prod"))]
+    {
+        dbg!(&a);
+        assert_eq!(a.asset_ids().count(), 6);
+        assert!(a.get("fonts.css").await?.is_none());
+
+        assert_get!(
+            a.get("index.html"),
+            b"Include fonts: Good font: fonts/comic-sans.u8-1qCm1qg9z.woff2\n\n\
+                Link to JS: bundle.KyQ5lDXq4JFo.js\nA variable: Yummy food\n"
+        );
+
+        assert_get!(
+            a.get("bundle.KyQ5lDXq4JFo.js"),
+            b"function doIt() {}\n//# sourceMappingURL=/bundle.zyuDzuDfiJjg.js.map"
+        );
+        assert_get!(a.get("bundle.zyuDzuDfiJjg.js.map"), b"Mappi McMapFace\n");
+        assert_get!(a.get("fonts/comic-sans.u8-1qCm1qg9z.woff2"), b"good stuff\n");
+        assert_get!(a.get("logo.0xoy2ercl8KS.svg"), b"Cool logo {{: not a template btw :}}\n");
+
+    }
+
+    // Dev
+    #[cfg(all(debug_assertions, not(feature = "debug_is_prod")))]
+    {
+        // Check info
+        let normal_files = &[
+            "index.html", "bundle.js", "bundle.js.map", "fonts/comic-sans.woff2",
+        ];
+        for &name in normal_files {
+            let info = a.asset_info(a.lookup(name).unwrap());
+            assert_eq!(info.is_served(), true);
+            assert_eq!(info.is_dynamic(), false);
+        }
+
+        assert_eq!(a.asset_info(a.lookup("logo.svg").unwrap()).is_served(), true);
+        assert_eq!(a.asset_info(a.lookup("logo.svg").unwrap()).is_dynamic(), true);
+
+        assert_eq!(a.asset_ids().count(), 6);
+        assert!(a.get("fonts.css").await?.is_none());
+
+        // Check contents
+        assert_get!(
+            a.get("index.html"),
+            b"Include fonts: Good font: fonts/comic-sans.woff2\n\n\
+                Link to JS: bundle.js\nA variable: Yummy food\n"
+        );
+
+        assert_get!(
+            a.get("bundle.js"),
+            b"function doIt() {}\n//# sourceMappingURL=/bundle.js.map"
+        );
+        assert_get!(a.get("bundle.js.map"), b"Mappi McMapFace\n");
+        assert_get!(a.get("fonts/comic-sans.woff2"), b"good stuff\n");
+        assert_get!(a.get("logo.svg"), b"Cool logo {{: not a template btw :}}\n");
     }
 
     Ok(())
