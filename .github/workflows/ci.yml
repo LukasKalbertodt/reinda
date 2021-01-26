@@ -25,17 +25,17 @@ jobs:
 
 
   check-debug-prod:
-    name: 'Build & test (debug, prod mode -- `debug_is_prod`)'
+    name: 'Build & test (debug, prod mode -- `debug-is-prod`)'
     runs-on: ubuntu-20.04
     steps:
     - uses: actions/checkout@v2
     - name: Build
-      run: cargo build --features=debug_is_prod
+      run: cargo build --features=debug-is-prod
     - name: Run tests
       run: |
-        cargo test -p reinda-core --features=debug_is_prod
-        cargo test -p reinda-macros --features=debug_is_prod
-        cargo test --features=debug_is_prod
+        cargo test -p reinda-core --features=debug-is-prod
+        cargo test -p reinda-macros --features=debug-is-prod
+        cargo test --features=debug-is-prod
 
 
   check-release:
@@ -57,9 +57,9 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Build
-      run: cargo build --no-default-features --features=debug_is_prod
+      run: cargo build --no-default-features --features=debug-is-prod
     - name: Run tests
       run: |
-        cargo test -p reinda-core --no-default-features --features=debug_is_prod
-        cargo test -p reinda-macros --no-default-features --features=debug_is_prod
-        cargo test --no-default-features --features=debug_is_prod
+        cargo test -p reinda-core --no-default-features --features=debug-is-prod
+        cargo test -p reinda-macros --no-default-features --features=debug-is-prod
+        cargo test --no-default-features --features=debug-is-prod

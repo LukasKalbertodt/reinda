@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 ### Added
-- Add Cargo-feature `debug_is_prod` which enables prod mode (embedding, hashes,
+- Add Cargo-feature `debug-is-prod` which enables prod mode (embedding, hashes,
   ...) when compiling in debug mode, too.
 - `Info::is_filename_hashed`
 - `Assets::lookup`

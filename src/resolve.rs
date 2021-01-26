@@ -34,7 +34,7 @@ impl Resolver {
 
     /// Prepares a resolver to resolve all assets. The returned resolver
     /// satisfies the preconditions for `Self::resolve`.
-    #[cfg(any(not(debug_assertions), feature = "debug_is_prod"))]
+    #[cfg(any(not(debug_assertions), feature = "debug-is-prod"))]
     pub(crate) async fn for_all_assets(setup: &Setup, config: &Config) -> Result<Resolver, Error> {
         let mut resolver = Resolver::new();
         for (id, asset_def) in setup.assets.iter().enumerate() {
@@ -59,7 +59,7 @@ impl Resolver {
     /// Prepares a resolver to resolve a single asset. All files are loaded from
     /// the file system. The returned resolver satisfies the preconditions for
     /// `Self::resolve`.
-    #[cfg(all(debug_assertions, not(feature = "debug_is_prod")))]
+    #[cfg(all(debug_assertions, not(feature = "debug-is-prod")))]
     pub(crate) async fn for_single_asset_from_fs(
         asset_id: AssetId,
         setup: &Setup,
@@ -281,7 +281,7 @@ async fn load_raw_from_fs(
     Ok(Bytes::from(out))
 }
 
-#[cfg(any(not(debug_assertions), feature = "debug_is_prod"))]
+#[cfg(any(not(debug_assertions), feature = "debug-is-prod"))]
 fn load_from_static(raw: &'static [u8]) -> Bytes {
     #[cfg(feature = "compress")]
     {

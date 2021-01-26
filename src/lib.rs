@@ -84,10 +84,10 @@
 //! By default, if you compile in Cargo debug mode (e.g. `cargo build`), *dev*
 //! mode is used. If you compile in Cargo's release mode (e.g. `cargo build
 //! --release`), *prod* mode is used. You can instruct `reinda` to always use
-//! prod mode by enabling the feature `debug_is_prod`:
+//! prod mode by enabling the feature `debug-is-prod`:
 //!
 //! ```text
-//! reinda = { version = "...", features = ["debug_is_prod"] }
+//! reinda = { version = "...", features = ["debug-is-prod"] }
 //! ```
 //!
 //!
@@ -175,7 +175,7 @@
 //!   hashing (see above). This feature adds the `bas64` and `sha2`
 //!   dependencies.
 //!
-//! - **`debug_is_prod`**: see the section about "prod" and "dev" mode above.
+//! - **`debug-is-prod`**: see the section about "prod" and "dev" mode above.
 //!
 //!
 //! # Notes, Requirements and Limitations
@@ -198,7 +198,7 @@
 use std::{collections::HashMap, path::PathBuf};
 use bytes::Bytes;
 
-#[cfg(any(not(debug_assertions), feature = "debug_is_prod"))]
+#[cfg(any(not(debug_assertions), feature = "debug-is-prod"))]
 use ahash::AHashMap;
 
 use reinda_core::template;
@@ -377,12 +377,12 @@ pub struct Assets {
 
     /// Stores the hashed paths of assets. This contains entries for hashed
     /// paths only; assets without `hash` are not present here.
-    #[cfg(any(not(debug_assertions), feature = "debug_is_prod"))]
+    #[cfg(any(not(debug_assertions), feature = "debug-is-prod"))]
     public_paths: AHashMap<AssetId, String>,
 
     /// Stores the actual asset data. The key is the public path. So this is
     /// basically the whole implementation of `Assets::get` in prod mode.
-    #[cfg(any(not(debug_assertions), feature = "debug_is_prod"))]
+    #[cfg(any(not(debug_assertions), feature = "debug-is-prod"))]
     assets: AHashMap<Box<str>, (AssetId, Bytes)>,
 }
 
@@ -408,12 +408,12 @@ impl Assets {
     /// error is returned in debug mode for a variety of reasons. In release
     /// mode, this method always returns `Ok(_)`. See [`GetError`].
     pub async fn get(&self, public_path: &str) -> Result<Option<Bytes>, GetError> {
-        #[cfg(all(debug_assertions, not(feature = "debug_is_prod")))]
+        #[cfg(all(debug_assertions, not(feature = "debug-is-prod")))]
         {
             self.load_from_fs(public_path).await
         }
 
-        #[cfg(any(not(debug_assertions), feature = "debug_is_prod"))]
+        #[cfg(any(not(debug_assertions), feature = "debug-is-prod"))]
         {
             Ok(self.assets.get(public_path).map(|(_, bytes)| bytes.clone()))
         }
@@ -422,12 +422,12 @@ impl Assets {
     /// Resolves the public path to an asset ID. If the public path does not
     /// match any asset, `None` is returned.
     pub fn lookup(&self, public_path: &str) -> Option<AssetId> {
-        #[cfg(all(debug_assertions, not(feature = "debug_is_prod")))]
+        #[cfg(all(debug_assertions, not(feature = "debug-is-prod")))]
         {
             self.setup.path_to_id(public_path)
         }
 
-        #[cfg(any(not(debug_assertions), feature = "debug_is_prod"))]
+        #[cfg(any(not(debug_assertions), feature = "debug-is-prod"))]
         {
             self.assets.get(public_path).map(|(id, _)| *id)
         }
@@ -444,12 +444,12 @@ impl Assets {
         let def = self.setup.assets.get(id.0 as usize)
             .expect("Assets::asset_info: no asset with the given ID exists");
         let public_path = {
-            #[cfg(any(not(debug_assertions), feature = "debug_is_prod"))]
+            #[cfg(any(not(debug_assertions), feature = "debug-is-prod"))]
             {
                 self.public_paths.get(&id).map(|s| &**s)
             }
 
-            #[cfg(all(debug_assertions, not(feature = "debug_is_prod")))]
+            #[cfg(all(debug_assertions, not(feature = "debug-is-prod")))]
             {
                 None
             }
@@ -462,13 +462,13 @@ impl Assets {
 // Private functions & methods.
 impl Assets {
     /// Implementation of `new` for dev builds.
-    #[cfg(all(debug_assertions, not(feature = "debug_is_prod")))]
+    #[cfg(all(debug_assertions, not(feature = "debug-is-prod")))]
     async fn new_impl(setup: Setup, config: Config) -> Result<Self, Error> {
         Ok(Self { setup, config })
     }
 
     /// Implementation of `new` for prod builds.
-    #[cfg(any(not(debug_assertions), feature = "debug_is_prod"))]
+    #[cfg(any(not(debug_assertions), feature = "debug-is-prod"))]
     async fn new_impl(setup: Setup, config: Config) -> Result<Self, Error> {
         use crate::resolve::ResolveResult;
 
@@ -499,7 +499,7 @@ impl Assets {
 
     /// Loads an asset from filesystem, dynamically resolving all includes and
     /// paths. This is the dev-build implementation of `Assets::get`.
-    #[cfg(all(debug_assertions, not(feature = "debug_is_prod")))]
+    #[cfg(all(debug_assertions, not(feature = "debug-is-prod")))]
     async fn load_from_fs(&self, start_path: &str) -> Result<Option<Bytes>, Error> {
         let id = match self.setup.path_to_id(start_path) {
             None => return Ok(None),
@@ -533,11 +533,11 @@ impl Assets {
 /// The `Assets::get` method will never produce an error. Therefore, in prod
 /// mode, `GetError` is an alias to the never type, signaling that an error will
 /// never happen.
-#[cfg(all(debug_assertions, not(feature = "debug_is_prod")))]
+#[cfg(all(debug_assertions, not(feature = "debug-is-prod")))]
 pub type GetError = Error;
 
 /// See above.
-#[cfg(any(not(debug_assertions), feature = "debug_is_prod"))]
+#[cfg(any(not(debug_assertions), feature = "debug-is-prod"))]
 pub type GetError = std::convert::Infallible;
 
 /// All errors that might be returned by `reinda`.

@@ -116,14 +116,14 @@ async fn cyclic_include() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Prod
-    #[cfg(any(not(debug_assertions), feature = "debug_is_prod"))]
+    #[cfg(any(not(debug_assertions), feature = "debug-is-prod"))]
     {
         let e = Assets::new(ASSETS, Config::default()).await.unwrap_err();
         assert_correct_error(e);
     }
 
     // Dev
-    #[cfg(all(debug_assertions, not(feature = "debug_is_prod")))]
+    #[cfg(all(debug_assertions, not(feature = "debug-is-prod")))]
     {
         let a = Assets::new(ASSETS, Config::default()).await?;
         assert_correct_error(a.get("a.txt").await.unwrap_err());
@@ -171,7 +171,7 @@ async fn use_case_web() -> Result<(), Box<dyn std::error::Error>> {
 
 
     // Prod
-    #[cfg(any(not(debug_assertions), feature = "debug_is_prod"))]
+    #[cfg(any(not(debug_assertions), feature = "debug-is-prod"))]
     {
         dbg!(&a);
         assert_eq!(a.asset_ids().count(), 6);
@@ -194,7 +194,7 @@ async fn use_case_web() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Dev
-    #[cfg(all(debug_assertions, not(feature = "debug_is_prod")))]
+    #[cfg(all(debug_assertions, not(feature = "debug-is-prod")))]
     {
         // Check info
         let normal_files = &[

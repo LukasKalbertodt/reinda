@@ -20,7 +20,7 @@ exclude = [".github"]
 
 [features]
 default = ["compress", "hash"]
-debug_is_prod = ["reinda-core/debug_is_prod", "reinda-macros/debug_is_prod"]
+debug-is-prod = ["reinda-core/debug-is-prod", "reinda-macros/debug-is-prod"]
 hash = ["base64", "sha2", "reinda-macros/hash"]
 compress = ["flate2", "reinda-macros/compress"]
 

@@ -16,7 +16,7 @@ license = "MIT/Apache-2.0"
 proc-macro = true
 
 [features]
-debug_is_prod = ["reinda-core/debug_is_prod"]
+debug-is-prod = ["reinda-core/debug-is-prod"]
 hash = []
 compress = ["flate2"]
 
