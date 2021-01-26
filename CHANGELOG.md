@@ -15,6 +15,9 @@ All notable changes to this project will be documented in this file.
 - Change `Assets::asset_info` to panic instead of returning `None`
 - Make filename hashing optional with Cargo-feature `hash` which is enabled by default
 
+### Fixed
+- Fix bug in filename hashing (forgot to add `/` between parents and file)
+- Fix bug in include resolution
 
 ## 0.1.0 - 2021-01-22
 ### Added
