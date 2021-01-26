@@ -18,6 +18,9 @@ categories = ["caching", "filesystem", "web-programming"]
 exclude = [".github"]
 
 
+[features]
+debug_is_prod = ["reinda-core/debug_is_prod", "reinda-macros/debug_is_prod"]
+
 [dependencies]
 ahash = "0.6"
 reinda-core = { version = "=0.0.1", path = "core" }

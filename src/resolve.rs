@@ -34,7 +34,7 @@ impl Resolver {
 
     /// Prepares a resolver to resolve all assets. The returned resolver
     /// satisfies the preconditions for `Self::resolve`.
-    #[cfg(not(debug_assertions))]
+    #[cfg(any(not(debug_assertions), feature = "debug_is_prod"))]
     pub(crate) async fn for_all_assets(setup: &Setup, config: &Config) -> Result<Resolver, Error> {
         let mut resolver = Resolver::new();
         for (id, asset_def) in setup.assets.iter().enumerate() {
@@ -59,7 +59,7 @@ impl Resolver {
     /// Prepares a resolver to resolve a single asset. All files are loaded from
     /// the file system. The returned resolver satisfies the preconditions for
     /// `Self::resolve`.
-    #[cfg(debug_assertions)]
+    #[cfg(all(debug_assertions, not(feature = "debug_is_prod")))]
     pub(crate) async fn for_single_asset_from_fs(
         asset_id: AssetId,
         setup: &Setup,

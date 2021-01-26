@@ -66,7 +66,7 @@ fn run(input: TokenStream) -> Result<TokenStream, syn::Error> {
             Some(s) => quote! { Some(#s) },
             None => quote! { None },
         };
-        let content_field = if cfg!(debug_assertions) {
+        let content_field = if cfg!(all(debug_assertions, not(feature = "debug_is_prod"))) {
             quote! {}
         } else {
             let data = embed(input.base_path.as_deref(), &asset)?;
