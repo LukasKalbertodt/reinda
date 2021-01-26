@@ -1,0 +1,2 @@
+a({{: include:foo.txt :}})
+a({{: include:bar.txt :}})
