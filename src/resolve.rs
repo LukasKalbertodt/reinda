@@ -266,7 +266,7 @@ async fn load_raw_from_fs(
 
     let mut out = Vec::new();
     if let Some(prepend) = def.prepend {
-        out.extend_from_slice(prepend.as_bytes());
+        out.extend_from_slice(prepend);
     }
 
     let mut file = tokio::fs::File::open(&path).await
@@ -275,7 +275,7 @@ async fn load_raw_from_fs(
         .map_err(|err| Error::Io { err, path: path.clone() })?;
 
     if let Some(append) = def.append {
-        out.extend_from_slice(append.as_bytes());
+        out.extend_from_slice(append);
     }
 
     Ok(Bytes::from(out))

@@ -99,8 +99,8 @@ enum FieldKind {
     Serve(bool),
     Dynamic(bool),
     Template(bool),
-    Append(String),
-    Prepend(String),
+    Append(syn::LitByteStr),
+    Prepend(syn::LitByteStr),
 }
 
 impl FieldKind {
@@ -137,7 +137,7 @@ impl Parse for Field {
             }
             k @ "prepend" | k @ "append" => {
                 let _: syn::Token![:] = input.parse()?;
-                let s = input.parse::<syn::LitStr>()?.value();
+                let s = input.parse::<syn::LitByteStr>()?;
                 match k {
                     "prepend" => FieldKind::Prepend(s),
                     "append" => FieldKind::Append(s),

@@ -69,8 +69,8 @@ pub struct AssetDef {
     /// Contains two strings in between which the hash should be inserted.
     pub hash: Option<(&'static str, &'static str)>,
     pub template: bool,
-    pub append: Option<&'static str>,
-    pub prepend: Option<&'static str>,
+    pub append: Option<&'static [u8]>,
+    pub prepend: Option<&'static [u8]>,
 
     #[cfg(any(not(debug_assertions), feature = "debug_is_prod"))]
     pub content: &'static [u8],

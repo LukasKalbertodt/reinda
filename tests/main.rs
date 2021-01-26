@@ -146,7 +146,7 @@ async fn use_case_web() -> Result<(), Box<dyn std::error::Error>> {
         "bundle.js": {
             template,
             hash,
-            append: "//# sourceMappingURL=/{{: path:bundle.js.map :}}"
+            append: b"//# sourceMappingURL=/{{: path:bundle.js.map :}}",
         },
         "bundle.js.map": { hash },
 
