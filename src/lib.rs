@@ -441,12 +441,7 @@ impl Assets {
             }
         };
 
-        Some(Info {
-            original_path: def.path,
-            public_path,
-            serve: def.serve,
-            dynamic: def.dynamic,
-        })
+        Some(Info { def, public_path })
     }
 }
 
@@ -573,35 +568,41 @@ pub enum Error {
 /// Contains meta information about an asset.
 #[derive(Debug)]
 pub struct Info<'a> {
-    original_path: &'static str,
     public_path: Option<&'a str>,
-    serve: bool,
-    dynamic: bool,
+    def: &'a AssetDef,
 }
 
 impl<'a> Info<'a> {
     /// Returns the original path specified in the [`assets!`] invocation.
     pub fn original_path(&self) -> &'static str {
-        self.original_path
+        self.def.path
     }
 
     /// Returns the public path, which might be the same as `original_path` or
     /// might contain a hash if `hash` was specified in [`assets!`] for this
     /// asset.
     pub fn public_path(&self) -> &'a str {
-        self.public_path.unwrap_or(self.original_path)
+        self.public_path.unwrap_or(self.def.path)
     }
 
     /// Returns whether or not this asset is publicly served. Equals the `serve`
     /// specification in the [`assets!`] macro.
     pub fn is_served(&self) -> bool {
-        self.serve
+        self.def.serve
     }
 
     /// Returns whether this asset is always loaded at runtime (either at
     /// startup or when requested) as opposed to being embeded. Equals the
     /// `dynamic` specification in the [`assets!`] macro.
     pub fn is_dynamic(&self) -> bool {
-        self.dynamic
+        self.def.dynamic
+    }
+
+    /// Returns whether this asset's filename currently (in this compilation
+    /// mode) includes a hash of the asset's content. In dev mode, this always
+    /// returns `false`; in prod mode, this returns `true` if `hash` was
+    /// specified in `assets!`.
+    pub fn is_filename_hashed(&self) -> bool {
+        self.public_path.is_some()
     }
 }
