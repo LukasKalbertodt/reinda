@@ -181,6 +181,16 @@ fn embed(
         data.extend_from_slice(append.as_bytes());
     }
 
+    // Compress data if the feature is activated.
+    #[cfg(feature = "compress")]
+    {
+        use flate2::{Compression, bufread::DeflateEncoder};
+
+        let mut compresser = DeflateEncoder::new(&*data, Compression::best());
+        let mut compressed = Vec::new();
+        compresser.read_to_end(&mut compressed).expect("error while compressing");
+        data = compressed;
+    }
 
     let lit = syn::LitByteStr::new(&data, Span::call_site());
     Ok(quote! {
