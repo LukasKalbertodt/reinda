@@ -1,6 +1,6 @@
 use core::panic;
 
-use reinda::{Assets, Config};
+use reinda::{Assets, Config, Error};
 
 
 macro_rules! assert_get {
@@ -89,6 +89,46 @@ async fn complex_includes() -> Result<(), Box<dyn std::error::Error>> {
         assert_eq!(info.is_served(), true);
         assert_eq!(info.is_dynamic(), false);
         assert_eq!(info.is_filename_hashed(), false);
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn cyclic_include() -> Result<(), Box<dyn std::error::Error>> {
+    const ASSETS: reinda::Setup  = reinda::assets! {
+        #![base_path = "tests/files/cyclic_include"]
+
+        "a.txt": { template },
+        "b.txt": { template },
+        "c.txt": { template },
+    };
+
+    fn assert_correct_error(e: Error) {
+        match e {
+            Error::CyclicInclude(cycle) => {
+                assert!(cycle.contains(&"a.txt".into()));
+                assert!(cycle.contains(&"b.txt".into()));
+                assert!(cycle.contains(&"c.txt".into()));
+            }
+            _ => panic!("wrong error: {}", e),
+        }
+    }
+
+    // Prod
+    #[cfg(any(not(debug_assertions), feature = "debug_is_prod"))]
+    {
+        let e = Assets::new(ASSETS, Config::default()).await.unwrap_err();
+        assert_correct_error(e);
+    }
+
+
+    #[cfg(all(debug_assertions, not(feature = "debug_is_prod")))]
+    {
+        let a = Assets::new(ASSETS, Config::default()).await?;
+        assert_correct_error(a.get("a.txt").await.unwrap_err());
+        assert_correct_error(a.get("b.txt").await.unwrap_err());
+        assert_correct_error(a.get("c.txt").await.unwrap_err());
     }
 
     Ok(())
