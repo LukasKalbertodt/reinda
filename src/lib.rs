@@ -370,7 +370,7 @@ pub struct Assets {
     /// Stores the actual asset data. The key is the public path. So this is
     /// basically the whole implementation of `Assets::get` in prod mode.
     #[cfg(any(not(debug_assertions), feature = "debug_is_prod"))]
-    assets: AHashMap<Box<str>, Bytes>,
+    assets: AHashMap<Box<str>, (AssetId, Bytes)>,
 }
 
 
@@ -402,7 +402,21 @@ impl Assets {
 
         #[cfg(any(not(debug_assertions), feature = "debug_is_prod"))]
         {
-            Ok(self.assets.get(public_path).cloned())
+            Ok(self.assets.get(public_path).map(|(_, bytes)| bytes.clone()))
+        }
+    }
+
+    /// Resolves the public path to an asset ID. If the public path does not
+    /// match any asset, `None` is returned.
+    pub fn lookup(&self, public_path: &str) -> Option<AssetId> {
+        #[cfg(all(debug_assertions, not(feature = "debug_is_prod")))]
+        {
+            self.setup.path_to_id(public_path)
+        }
+
+        #[cfg(any(not(debug_assertions), feature = "debug_is_prod"))]
+        {
+            self.assets.get(public_path).map(|(id, _)| *id)
         }
     }
 
@@ -462,7 +476,7 @@ impl Assets {
                     .map(|s| &**s)
                     .unwrap_or(setup.def(id).path)
                     .into();
-                (public_path, bytes)
+                (public_path, (id, bytes))
             })
             .collect();
 
