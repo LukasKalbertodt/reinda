@@ -10,7 +10,7 @@
 //! with [`assets!`], (2) create an [`Assets`] instance, (3) call
 //! [`Assets::get`] to serve your asset.
 //!
-//! ```no_run
+//! ```ignore
 //! use reinda::{assets, Assets, Config, Setup};
 //!
 //! const ASSETS: Setup = assets! {
@@ -200,7 +200,7 @@ mod resolve;
 ///
 /// Simple example:
 ///
-/// ```
+/// ```ignore
 /// use reinda::{assets, Setup};
 ///
 /// const ASSETS: Setup = assets! {

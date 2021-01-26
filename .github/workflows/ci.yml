@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [ master ]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: --deny warnings
+
+jobs:
+  check-debug-dev:
+    name: 'Build & test (debug, dev mode)'
+    runs-on: ubuntu-20.04
+    steps:
+    - uses: actions/checkout@v2
+    - name: Build
+      run: cargo build
+    - name: Run tests
+      run: |
+        cargo test -p reinda-core
+        cargo test -p reinda-macros
+        cargo test
+
+
+  check-debug-prod:
+    name: 'Build & test (debug, prod mode -- `debug_is_prod`)'
+    runs-on: ubuntu-20.04
+    steps:
+    - uses: actions/checkout@v2
+    - name: Build
+      run: cargo build --features=debug_is_prod
+    - name: Run tests
+      run: |
+        cargo test -p reinda-core --features=debug_is_prod
+        cargo test -p reinda-macros --features=debug_is_prod
+        cargo test --features=debug_is_prod
+
+
+  check-release:
+    name: 'Build & test (release, prod mode)'
+    runs-on: ubuntu-20.04
+    steps:
+    - uses: actions/checkout@v2
+    - name: Build
+      run: cargo build --release
+    - name: Run tests
+      run: |
+        cargo test -p reinda-core --release
+        cargo test -p reinda-macros --release
+        cargo test --release
