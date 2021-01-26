@@ -251,7 +251,7 @@ impl Iterator for FragmentSpans<'_> {
 }
 
 fn find(haystack: &[u8], needle: &[u8]) -> Option<usize> {
-    haystack.windows(needle.len()).position(|win| win == needle)
+    twoway::find_bytes(haystack, needle)
 }
 
 
