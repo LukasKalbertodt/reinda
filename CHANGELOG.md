@@ -10,6 +10,11 @@ All notable changes to this project will be documented in this file.
 - `Info::is_filename_hashed`
 - `Assets::lookup`
 
+### Changed
+- Make field of `AssetId` private
+- Change `Assets::asset_info` to panic instead of returning `None`
+
+
 ## 0.1.0 - 2021-01-22
 ### Added
 - Everything
