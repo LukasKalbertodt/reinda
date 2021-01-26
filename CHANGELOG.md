@@ -7,6 +7,13 @@ All notable changes to this project will be documented in this file.
 ### Added
 - Add Cargo-feature `debug_is_prod` which enables prod mode (embedding, hashes,
   ...) when compiling in debug mode, too.
+- `Info::is_filename_hashed`
+- `Assets::lookup`
+
+### Changed
+- Make field of `AssetId` private
+- Change `Assets::asset_info` to panic instead of returning `None`
+
 
 ## 0.1.0 - 2021-01-22
 ### Added

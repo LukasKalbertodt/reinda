@@ -370,7 +370,7 @@ pub struct Assets {
     /// Stores the actual asset data. The key is the public path. So this is
     /// basically the whole implementation of `Assets::get` in prod mode.
     #[cfg(any(not(debug_assertions), feature = "debug_is_prod"))]
-    assets: AHashMap<Box<str>, Bytes>,
+    assets: AHashMap<Box<str>, (AssetId, Bytes)>,
 }
 
 
@@ -402,7 +402,21 @@ impl Assets {
 
         #[cfg(any(not(debug_assertions), feature = "debug_is_prod"))]
         {
-            Ok(self.assets.get(public_path).cloned())
+            Ok(self.assets.get(public_path).map(|(_, bytes)| bytes.clone()))
+        }
+    }
+
+    /// Resolves the public path to an asset ID. If the public path does not
+    /// match any asset, `None` is returned.
+    pub fn lookup(&self, public_path: &str) -> Option<AssetId> {
+        #[cfg(all(debug_assertions, not(feature = "debug_is_prod")))]
+        {
+            self.setup.path_to_id(public_path)
+        }
+
+        #[cfg(any(not(debug_assertions), feature = "debug_is_prod"))]
+        {
+            self.assets.get(public_path).map(|(id, _)| *id)
         }
     }
 
@@ -411,10 +425,11 @@ impl Assets {
         (0..self.setup.assets.len()).map(|i| AssetId(i as u32))
     }
 
-    /// Returns meta information about a specific asset, or `None` if no asset
-    /// with the given ID exists.
-    pub fn asset_info(&self, id: AssetId) -> Option<Info<'_>> {
-        let def = self.setup.assets.get(id.0 as usize)?;
+    /// Returns meta information about a specific asset. Panics if no asset with
+    /// the given ID exists.
+    pub fn asset_info(&self, id: AssetId) -> Info<'_> {
+        let def = self.setup.assets.get(id.0 as usize)
+            .expect("Assets::asset_info: no asset with the given ID exists");
         let public_path = {
             #[cfg(any(not(debug_assertions), feature = "debug_is_prod"))]
             {
@@ -427,12 +442,7 @@ impl Assets {
             }
         };
 
-        Some(Info {
-            original_path: def.path,
-            public_path,
-            serve: def.serve,
-            dynamic: def.dynamic,
-        })
+        Info { def, public_path }
     }
 }
 
@@ -462,7 +472,7 @@ impl Assets {
                     .map(|s| &**s)
                     .unwrap_or(setup.def(id).path)
                     .into();
-                (public_path, bytes)
+                (public_path, (id, bytes))
             })
             .collect();
 
@@ -559,35 +569,41 @@ pub enum Error {
 /// Contains meta information about an asset.
 #[derive(Debug)]
 pub struct Info<'a> {
-    original_path: &'static str,
     public_path: Option<&'a str>,
-    serve: bool,
-    dynamic: bool,
+    def: &'a AssetDef,
 }
 
 impl<'a> Info<'a> {
     /// Returns the original path specified in the [`assets!`] invocation.
     pub fn original_path(&self) -> &'static str {
-        self.original_path
+        self.def.path
     }
 
     /// Returns the public path, which might be the same as `original_path` or
     /// might contain a hash if `hash` was specified in [`assets!`] for this
     /// asset.
     pub fn public_path(&self) -> &'a str {
-        self.public_path.unwrap_or(self.original_path)
+        self.public_path.unwrap_or(self.def.path)
     }
 
     /// Returns whether or not this asset is publicly served. Equals the `serve`
     /// specification in the [`assets!`] macro.
     pub fn is_served(&self) -> bool {
-        self.serve
+        self.def.serve
     }
 
     /// Returns whether this asset is always loaded at runtime (either at
     /// startup or when requested) as opposed to being embeded. Equals the
     /// `dynamic` specification in the [`assets!`] macro.
     pub fn is_dynamic(&self) -> bool {
-        self.dynamic
+        self.def.dynamic
+    }
+
+    /// Returns whether this asset's filename currently (in this compilation
+    /// mode) includes a hash of the asset's content. In dev mode, this always
+    /// returns `false`; in prod mode, this returns `true` if `hash` was
+    /// specified in `assets!`.
+    pub fn is_filename_hashed(&self) -> bool {
+        self.public_path.is_some()
     }
 }
