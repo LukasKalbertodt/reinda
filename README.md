@@ -45,9 +45,9 @@ See [**the documentation**](https://docs.rs/reinda) for more information.
   - [x] Include other assets
   - [x] Refer to other assets by path
   - [x] Use runtime variables
+- [x] Compress embedded files to shrink the resulting binary
+- [x] Cargo feature to embed everything in debug mode
 - [ ] Well tested
-- [ ] Compress embedded files to shrink the resulting binary
-- [ ] Cargo feature to embed everything in debug mode
 - [ ] Template syntax checked at compile time (in prod mode)
 
 

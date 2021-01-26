@@ -47,7 +47,7 @@ impl Resolver {
             let raw_bytes = if asset_def.dynamic {
                 load_raw_from_fs(id, setup, config).await?
             } else {
-                Bytes::from_static(asset_def.content)
+                load_from_static(asset_def.content)
             };
 
             resolver.add_raw(raw_bytes, id, setup)?;
@@ -279,6 +279,23 @@ async fn load_raw_from_fs(
     }
 
     Ok(Bytes::from(out))
+}
+
+#[cfg(any(not(debug_assertions), feature = "debug_is_prod"))]
+fn load_from_static(raw: &'static [u8]) -> Bytes {
+    #[cfg(feature = "compress")]
+    {
+        use flate2::bufread::DeflateDecoder;
+        use std::io::Read;
+
+        let mut decompressed = Vec::new();
+        let mut decoder = DeflateDecoder::new(raw);
+        decoder.read_to_end(&mut decompressed).expect("failed to decompress static data");
+        Bytes::from(decompressed)
+    }
+
+    #[cfg(not(feature = "compress"))]
+    Bytes::from_static(raw)
 }
 
 #[derive(Debug)]

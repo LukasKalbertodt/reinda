@@ -165,6 +165,19 @@
 //! ```
 //!
 //!
+//! # Cargo features
+//!
+//! - **`compress`** (enabled by default): if enabled, embedded files are
+//!   compressed. This often noticably reduces the binary size of the
+//!   executable. This feature adds the `flate2` dependency.
+//!
+//! - **`hash`** (enabled by default): is required for support of filename
+//!   hashing (see above). This feature adds the `bas64` and `sha2`
+//!   dependencies.
+//!
+//! - **`debug_is_prod`**: see the section about "prod" and "dev" mode above.
+//!
+//!
 //! # Notes, Requirements and Limitations
 //!
 //! - `reinda` actually consists of three crates: `reinda-core`, `reinda-macros`
