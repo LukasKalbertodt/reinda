@@ -1,7 +1,7 @@
 //! This library helps with easily including and serving assets (like JS or CSS
 //! files) in your web application. It is fairly configurable and supports a
 //! variety of features. In particular, it can embed all assets into your
-//! executable at compile to get an easy to deploy standalone-executable.
+//! executable at compile time to get an easy to deploy standalone-executable.
 //!
 //!
 //! # Quick start
@@ -405,8 +405,8 @@ impl Assets {
     /// specified in [`assets!`].
     ///
     /// If no asset with the specified path exists, `Ok(None)` is returned. An
-    /// error is returned in debug mode for a variety of reasons. In release
-    /// mode, this method always returns `Ok(_)`. See [`GetError`].
+    /// error is returned in debug mode for a variety of reasons. In prod mode,
+    /// this method always returns `Ok(_)`. See [`GetError`].
     pub async fn get(&self, public_path: &str) -> Result<Option<Bytes>, GetError> {
         #[cfg(all(debug_assertions, not(feature = "debug-is-prod")))]
         {
