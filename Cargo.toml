@@ -1,12 +1,12 @@
 [package]
 name = "reinda"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Lukas Kalbertodt <lukas.kalbertodt@gmail.com>"]
 edition = "2018"
 
 description = """
 Easily embed and manage your assets for your web application to build
-standalone-executables. Offers filename hashing, templating and more.
+standalone-executables. Offers filename hashing, templating, compression and more.
 """
 documentation = "https://docs.rs/reinda/"
 repository = "https://github.com/LukasKalbertodt/reinda/"
@@ -29,8 +29,8 @@ ahash = "0.6"
 base64 = { version = "0.13", optional = true }
 bytes = "1"
 flate2 = { version = "1", optional = true }
-reinda-core = { version = "=0.0.1", path = "core" }
-reinda-macros = { version = "=0.0.1", path = "macros" }
+reinda-core = { version = "=0.0.2", path = "core" }
+reinda-macros = { version = "=0.0.2", path = "macros" }
 sha2 = { version = "0.9", optional = true }
 thiserror = "1"
 tokio = { version = "1", features = ["fs", "io-util"] }
