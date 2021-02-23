@@ -77,7 +77,7 @@
 //! | - | -------- | --------- |
 //! | Normal assets | Loaded from filesystem when requested | Embedded into binary |
 //! | `dynamic: true` assets | Loaded from filesystem when requested | Loaded in [`Assets::new`] |
-//! | `hash: true` assets | filename not modified | hash inserted into filename |
+//! | `hash: true` assets | Filename not modified | Hash inserted into filename |
 //! | Base path | `config.base_path` with current workdir as fallback | Given via `#![base_path]` |
 //!
 //!
@@ -94,7 +94,7 @@
 //! # Template
 //!
 //! `reinda` has a simple template system. The input file is checked for
-//! "fragments" which have the syntax `{{: foo :}}`. The start token is actually
+//! *fragments* which have the syntax `{{: foo :}}`. The start token is actually
 //! `{{: ` (note the whitespace!). So `{{:foo:}}` is not recognized as fragment.
 //! The syntax was chosen to not conflict with other template syntax that might
 //! be present in the asset files. Please let me know if some other template
@@ -172,7 +172,7 @@
 //!   executable. This feature adds the `flate2` dependency.
 //!
 //! - **`hash`** (enabled by default): is required for support of filename
-//!   hashing (see above). This feature adds the `bas64` and `sha2`
+//!   hashing (see above). This feature adds the `base64` and `sha2`
 //!   dependencies.
 //!
 //! - **`debug-is-prod`**: see the section about "prod" and "dev" mode above.
