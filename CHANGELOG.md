@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 
+## [0.2.1] - 2023-04-17
+- Update dependencies (none of these are exposed in the API, so a minor version bump is sufficient).
+
 ## [0.2.0] - 2021-01-27
 ### Added
 - Add Cargo-feature `debug-is-prod` which enables prod mode (embedding, hashes,
@@ -31,5 +34,6 @@ All notable changes to this project will be documented in this file.
 - Everything
 
 
-[Unreleased]: https://github.com/LukasKalbertodt/reinda/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/LukasKalbertodt/reinda/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/LukasKalbertodt/reinda/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/LukasKalbertodt/reinda/compare/v0.1.0...v0.2.0
