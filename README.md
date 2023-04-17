@@ -1,6 +1,6 @@
 # `reinda`: easily embed and manage assets
 
-[<img alt="CI status of master" src="https://img.shields.io/github/workflow/status/LukasKalbertodt/reinda/CI/master?label=CI&logo=github&logoColor=white&style=for-the-badge" height="23">](https://github.com/LukasKalbertodt/reinda/actions?query=workflow%3ACI+branch%3Amaster)
+[<img alt="CI status of master" src="https://img.shields.io/github/actions/workflow/status/LukasKalbertodt/reinda/ci.yml?branch=master&label=CI&logo=github&logoColor=white&style=for-the-badge" height="23">](https://github.com/LukasKalbertodt/reinda/actions/workflows/ci.yml)
 [<img alt="Crates.io Version" src="https://img.shields.io/crates/v/reinda?logo=rust&style=for-the-badge" height="23">](https://crates.io/crates/reinda)
 [<img alt="docs.rs" src="https://img.shields.io/crates/v/reinda?color=blue&label=docs&style=for-the-badge" height="23">](https://docs.rs/reinda)
 
