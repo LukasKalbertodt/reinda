@@ -373,6 +373,8 @@ pub struct Config {
 #[derive(Debug)]
 pub struct Assets {
     setup: Setup,
+
+    #[allow(dead_code)] // In some modes, this is not read
     config: Config,
 
     /// Stores the hashed paths of assets. This contains entries for hashed
