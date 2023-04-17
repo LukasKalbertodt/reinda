@@ -13,6 +13,7 @@ pub(crate) fn hashed_path_of(_: &AssetDef, _: &Bytes) -> String {
 pub(crate) fn hashed_path_of(def: &AssetDef, content: &Bytes) -> String {
     use std::path::Path;
     use sha2::{Digest, Sha256};
+    use base64::Engine;
 
     /// How many bytes of the 32 byte (256 bit) hash are used and encoded in the
     /// filename.
@@ -36,9 +37,8 @@ pub(crate) fn hashed_path_of(def: &AssetDef, content: &Bytes) -> String {
 
     // Calc and then base64 encode the hash.
     let hash = Sha256::digest(&content);
-    base64::encode_config_buf(
+    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode_string(
         &hash.as_slice()[..HASH_BYTES_IN_FILENAME],
-        base64::URL_SAFE_NO_PAD,
         &mut out,
     );
 

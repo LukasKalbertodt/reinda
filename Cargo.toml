@@ -26,7 +26,7 @@ compress = ["flate2", "reinda-macros/compress"]
 
 [dependencies]
 ahash = "0.8.3"
-base64 = { version = "0.13", optional = true }
+base64 = { version = "0.21.0", optional = true }
 bytes = "1"
 flate2 = { version = "1", optional = true }
 reinda-core = { version = "=0.0.2", path = "core" }
