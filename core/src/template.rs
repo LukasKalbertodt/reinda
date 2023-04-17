@@ -251,7 +251,7 @@ impl Iterator for FragmentSpans<'_> {
 }
 
 fn find(haystack: &[u8], needle: &[u8]) -> Option<usize> {
-    twoway::find_bytes(haystack, needle)
+    memchr::memmem::find(haystack, needle)
 }
 
 

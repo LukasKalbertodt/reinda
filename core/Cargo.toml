@@ -18,4 +18,4 @@ debug-is-prod = []
 [dependencies]
 bytes = "1"
 thiserror = "1"
-twoway = "0.2.1"
+memchr = "2.5.0"
