@@ -25,13 +25,13 @@ hash = ["base64", "sha2", "reinda-macros/hash"]
 compress = ["flate2", "reinda-macros/compress"]
 
 [dependencies]
-ahash = "0.6"
+ahash = "0.8.3"
 base64 = { version = "0.13", optional = true }
 bytes = "1"
 flate2 = { version = "1", optional = true }
 reinda-core = { version = "=0.0.2", path = "core" }
 reinda-macros = { version = "=0.0.2", path = "macros" }
-sha2 = { version = "0.9", optional = true }
+sha2 = { version = "0.10.6", optional = true }
 thiserror = "1"
 tokio = { version = "1", features = ["fs", "io-util"] }
 
