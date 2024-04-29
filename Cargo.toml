@@ -20,8 +20,8 @@ exclude = [".github"]
 
 [features]
 default = ["compress", "hash"]
-debug-is-prod = ["reinda-core/debug-is-prod", "reinda-macros/debug-is-prod"]
-hash = ["base64", "sha2", "reinda-macros/hash"]
+always-embed = ["reinda-macros/always-embed"]
+hash = ["dep:base64", "dep:sha2"]
 compress = ["flate2", "reinda-macros/compress"]
 
 [dependencies]
@@ -29,7 +29,6 @@ ahash = "0.8.3"
 base64 = { version = "0.21.0", optional = true }
 bytes = "1"
 flate2 = { version = "1", optional = true }
-reinda-core = { version = "=0.0.3", path = "core" }
 reinda-macros = { version = "=0.0.3", path = "macros" }
 sha2 = { version = "0.10.6", optional = true }
 thiserror = "1"

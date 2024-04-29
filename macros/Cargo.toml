@@ -16,18 +16,11 @@ license = "MIT/Apache-2.0"
 proc-macro = true
 
 [features]
-debug-is-prod = ["reinda-core/debug-is-prod"]
-hash = []
-compress = ["flate2"]
+always-embed = []
+compress = ["dep:brotli"]
 
 [dependencies]
-bytes = "1"
-flate2 = { version = "1", optional = true }
+brotli = { version = "5", optional = true }
 proc-macro2 = "1"
 quote = "1"
-reinda-core = { version = "=0.0.3", path = "../core" }
-
-[dependencies.syn]
-version = "1"
-default-features = false
-features = ["parsing", "proc-macro", "derive", "printing"]
+litrs = "0.4.1"

@@ -1,196 +1,112 @@
-use std::{collections::HashMap, unreachable};
+use std::{convert::TryFrom, iter::Peekable};
+use proc_macro2::{token_stream::IntoIter, Delimiter, TokenStream, TokenTree};
 
-use proc_macro2::Span;
-use syn::{parse::{Parse, ParseStream}, punctuated::Punctuated, spanned::Spanned};
-
-use crate::{Asset, AssetSettings, Input};
+use crate::{err::{err, Error}, ast::Input};
 
 
-impl Parse for Input {
-    fn parse(input: ParseStream) -> Result<Self, syn::Error> {
-        // Parse attributes
-        let mut base_path = None;
-        if input.peek(syn::Token![#]) {
-            let attrs = input.call(syn::Attribute::parse_inner)?;
-            for attr in attrs {
-                let meta = attr.parse_meta()?;
+pub(crate) fn parse(tokens: TokenStream) -> Result<Input, Error> {
+    let mut base_path = None;
+    let mut files = None;
+    let mut compression_threshold = None;
+    let mut compression_quality = None;
+    let mut print_stats = None;
 
-                match () {
-                    () if meta.path().is_ident("base_path") => {
-                        if let syn::Meta::NameValue(
-                            syn::MetaNameValue { lit: syn::Lit::Str(s), ..}
-                        ) = meta {
-                            base_path = Some(s.value());
-                        } else {
-                            return Err(syn::Error::new(
-                                meta.span(),
-                                "this attribute has the form `#![base_path = \"foo\"]`",
-                            ));
-                        }
-                    }
-                    _ => return Err(syn::Error::new(meta.path().span(), "invalid attribute")),
-                }
+    let mut it = tokens.into_iter().peekable();
 
-            }
-        }
-
-        // Parse list of entries/assets
-        let entries = input.call(<Punctuated<Entry, syn::Token![,]>>::parse_terminated)?;
-        let assets = entries.into_iter()
-            .map(|entry| Ok(Asset {
-                path: entry.key.value(),
-                path_span: entry.key.span(),
-                settings: fields_to_settings(entry.fields)?,
-            }))
-            .collect::<Result<_, syn::Error>>()?;
-
-        Ok(Self { assets, base_path })
-    }
-}
-
-fn fields_to_settings(fields: Vec<Field>) -> Result<AssetSettings, syn::Error> {
-    let mut asset = AssetSettings::default();
-    let mut hash_span = None;
-    for field in fields {
-        match field.kind {
-            FieldKind::Hash(v) => {
-                asset.hash = Some(v);
-                hash_span = Some(field.span);
-            }
-            FieldKind::Serve(v) => asset.serve = v,
-            FieldKind::Dynamic(v) => asset.dynamic = v,
-            FieldKind::Template(v) => asset.template = v,
-            FieldKind::Prepend(s) => asset.prepend = Some(s),
-            FieldKind::Append(s) => asset.append = Some(s),
-        }
-    }
-
-    if !asset.serve && asset.hash.is_some() {
-        return Err(syn::Error::new(
-            hash_span.unwrap(),
-            "a hashed file name does not make sense for an asset that is not served",
-        ))
-    }
-
-    if asset.hash.is_some() && cfg!(not(feature = "hash")) {
-        return Err(syn::Error::new(
-            hash_span.unwrap(),
-            "asset has 'hash' specified, but 'hash' Cargo-feature is disabled",
-        ));
-    }
-
-    Ok(asset)
-}
-
-/// This is the AST that is used for parsing. It never leaves this module,
-/// though, as it's quickly converted into the `Input` representation.
-struct Entry {
-    key: syn::LitStr,
-    fields: Vec<Field>,
-}
-
-struct Field {
-    span: Span,
-    kind: FieldKind,
-}
-
-enum FieldKind {
-    Hash(Option<(String, String)>),
-    Serve(bool),
-    Dynamic(bool),
-    Template(bool),
-    Append(syn::LitByteStr),
-    Prepend(syn::LitByteStr),
-}
-
-impl FieldKind {
-    fn keyword(&self) -> &'static str {
-        match self {
-            Self::Hash(_) => "hash",
-            Self::Serve(_) => "serve",
-            Self::Dynamic(_) => "dynamic",
-            Self::Template(_) => "template",
-            Self::Append(_) => "append",
-            Self::Prepend(_) => "prepend",
-        }
-    }
-}
-
-impl Parse for Field {
-    fn parse(mut input: ParseStream) -> Result<Self, syn::Error> {
-        let ident = input.parse::<syn::Ident>()?;
-        let kind = match &*ident.to_string() {
-            "serve" => FieldKind::Serve(parse_opt_bool(&mut input)?),
-            "dynamic" => FieldKind::Dynamic(parse_opt_bool(&mut input)?),
-            "template" => FieldKind::Template(parse_opt_bool(&mut input)?),
-            "hash" => {
-                if input.peek(syn::Token![:]) {
-                    let _: syn::Token![:] = input.parse()?;
-                    let first: syn::LitStr = input.parse()?;
-                    let _: syn::Token![...] = input.parse()?;
-                    let second: syn::LitStr = input.parse()?;
-
-                    FieldKind::Hash(Some((first.value(), second.value())))
-                } else {
-                    FieldKind::Hash(None)
-                }
-            }
-            k @ "prepend" | k @ "append" => {
-                let _: syn::Token![:] = input.parse()?;
-                let s = input.parse::<syn::LitByteStr>()?;
-                match k {
-                    "prepend" => FieldKind::Prepend(s),
-                    "append" => FieldKind::Append(s),
-                    _ => unreachable!(),
-                }
-            }
-            other => {
-                let msg = format!("'{}' not expected here", other);
-                return Err(syn::Error::new(ident.span(), msg));
-            }
+    while it.peek().is_some() {
+        // Parse field name.
+        let field_name = match it.next().unwrap() {
+            TokenTree::Ident(i) => i,
+            other => return Err(err!(@other.span(), "expected identifier, found something else")),
         };
 
-        Ok(Self {
-            span: ident.span(),
-            kind,
-        })
-    }
-}
-
-fn parse_opt_bool(input: &mut ParseStream) -> Result<bool, syn::Error> {
-    if input.peek(syn::Token![:]) {
-        let _: syn::Token![:] = input.parse()?;
-        let v: syn::LitBool = input.parse()?;
-        Ok(v.value)
-    } else {
-        Ok(true)
-    }
-}
-
-impl Parse for Entry {
-    fn parse(input: ParseStream) -> Result<Self, syn::Error> {
-        let key = input.parse()?;
-        let _: syn::Token![:] = input.parse()?;
-
-        let inner;
-        syn::braced!(inner in input);
-        let fields = inner.call(<Punctuated<Field, syn::Token![,]>>::parse_terminated)?;
-
-        // Check for duplicate fields
-        let mut map = HashMap::new();
-        for field in &fields {
-            if let Some(prev) = map.insert(field.kind.keyword(), field.span) {
-                let msg = format!(
-                    "duplicate specifier: '{}' already listed for this asset",
-                    field.kind.keyword(),
-                );
-                return Err(syn::Error::new(prev, msg));
-            }
+        // Parse `:`
+        match it.next().ok_or_else(unexpected_end_of_input)? {
+            TokenTree::Punct(p) if p.as_char() == ':' => {}
+            other => return Err(err!(@other.span(), "expected `:`, found something else")),
         }
 
-        Ok(Self {
-            key,
-            fields: fields.into_iter().collect(),
-        })
+        // Parse value.
+        match field_name.to_string().as_str() {
+            "base_path" => {
+                base_path = Some(parse_string_lit(&mut it)?);
+            }
+
+            "print_stats" => {
+                print_stats = Some(parse_lit::<litrs::BoolLit>(&mut it)?.value());
+            }
+
+            "compression_threshold" => {
+                let lit = parse_lit::<litrs::FloatLit<String>>(&mut it)?;
+                let value = lit.number_part().parse()
+                    .map_err(|e| err!("failed to parse compression_threshold: {e}"))?;
+                compression_threshold = Some(value);
+            }
+
+            "compression_quality" => {
+                let lit = parse_lit::<litrs::IntegerLit<String>>(&mut it)?;
+                let value = lit.value::<u8>()
+                    .ok_or_else(|| err!("compression quality too large"))?;
+                compression_quality = Some(value);
+            }
+
+            "files" => {
+                let inner = match it.next().ok_or_else(unexpected_end_of_input)? {
+                    TokenTree::Group(g) if g.delimiter() == Delimiter::Bracket => g.stream(),
+                    other => return Err(err!(@other.span(), "expected string array `[...]`")),
+                };
+
+                let mut inner_it = inner.into_iter().peekable();
+                let mut values = vec![];
+                while inner_it.peek().is_some() {
+                    let span = inner_it.peek().unwrap().span();
+                    let value = parse_string_lit(&mut inner_it)?;
+                    values.push((value, span));
+                    eat_comma_sep(&mut inner_it)?;
+                }
+
+                files = Some(values);
+            }
+
+            other => return Err(err!(@field_name.span(), "unknown field name '{other}'")),
+        }
+
+        eat_comma_sep(&mut it)?;
     }
+
+    Ok(Input {
+        base_path,
+        print_stats,
+        compression_threshold,
+        compression_quality,
+        files: files.ok_or_else(|| err!("missing field 'files' in input"))?,
+    })
+}
+
+fn unexpected_end_of_input() -> Error {
+    err!("unexpected end of input")
+}
+
+type ParseIter = Peekable<IntoIter>;
+
+fn eat_comma_sep(it: &mut ParseIter) -> Result<(), Error> {
+    match it.next() {
+        None => Ok(()),
+        Some(TokenTree::Punct(p)) if p.as_char() == ',' => Ok(()),
+        Some(other) => Err(err!(@other.span(), "expected comma or end of input")),
+    }
+}
+
+fn parse_string_lit(it: &mut ParseIter) -> Result<String, Error> {
+    parse_lit::<litrs::StringLit<String>>(it).map(|l| l.into_value().into_owned())
+}
+
+fn parse_lit<T>(it: &mut ParseIter) -> Result<T, Error>
+where
+    T: TryFrom<TokenTree>,
+    T::Error: std::fmt::Display,
+{
+    let token = it.next().ok_or_else(unexpected_end_of_input)?;
+    let span = token.span();
+    T::try_from(token).map_err(|e| err!(@span, "{e}"))
 }
