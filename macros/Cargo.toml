@@ -21,6 +21,7 @@ compress = ["dep:brotli"]
 
 [dependencies]
 brotli = { version = "5", optional = true }
+glob = "0.3.1"
 proc-macro2 = "1"
 quote = "1"
 litrs = "0.4.1"

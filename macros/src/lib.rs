@@ -2,7 +2,7 @@ use proc_macro::TokenStream as TokenStream1;
 
 use self::{
     err::{Error, err},
-    ast::Input,
+    ast::{EmbedConfig, Input},
 };
 
 mod emit;

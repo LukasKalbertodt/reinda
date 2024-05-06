@@ -204,13 +204,23 @@ pub struct Embeds {
     pub files: &'static [EmbeddedFile],
 }
 
-#[doc(hidden)]
 #[derive(Debug)]
 pub struct EmbeddedFile {
+    #[doc(hidden)]
     pub path: &'static str,
 
+    /// The glob pattern that was specified in the macro. Is equal to `path` for
+    /// simple entries without glob pattern syntax.
+    #[doc(hidden)]
+    pub glob: &'static str,
+
+    /// The actual file contents.
     #[cfg(any(not(debug_assertions), feature = "always-embed"))]
+    #[doc(hidden)]
     pub content: &'static [u8],
+
+    /// Whether the `content` field is compressed.
     #[cfg(any(not(debug_assertions), feature = "always-embed"))]
+    #[doc(hidden)]
     pub compressed: bool,
 }
