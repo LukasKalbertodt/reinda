@@ -224,3 +224,45 @@ pub struct EmbeddedFile {
     #[doc(hidden)]
     pub compressed: bool,
 }
+
+impl Embeds {
+    pub fn files(&self) -> impl Iterator<Item = &'static EmbeddedFile> {
+        self.files.iter()
+    }
+
+}
+
+impl EmbeddedFile {
+    /// Returns the relative path of the embedded file, with the base path
+    /// stripped. When not using glob patterns, this is exactly the string you
+    /// specified inside the `embed!` macro.
+    ///
+    /// Note: the absolute path of this file is not stored, as including this in
+    /// the binary might leak information about the build system.
+    pub fn path(&self) -> &'static str {
+        self.path
+    }
+
+    /// The entry in the `embed!` macro that lead to the inclusion of this file.
+    /// When not using glob patterns, this is equal to[`Self::path`], otherwise
+    /// this might return `"icons/*.svg"` whereas `path()` would returns
+    /// something specific like `"icons/foo.svg"`.
+    pub fn glob(&self) -> &'static str {
+        self.glob
+    }
+
+    /// Returns the contents of the embedded file. This method might decompress
+    /// data, so try calling it only once for each file to avoid doing
+    /// duplicate work.
+    #[cfg(any(not(debug_assertions), feature = "always-embed"))]
+    pub fn content(&self) -> std::borrow::Cow<'static, [u8]> {
+        if self.compressed {
+            let mut decompressed = Vec::new();
+            brotli::BrotliDecompress(&mut &*self.content, &mut decompressed)
+                .expect("unexpected error while decompressing Brotli");
+            decompressed.into()
+        } else {
+            self.content.into()
+        }
+    }
+}
