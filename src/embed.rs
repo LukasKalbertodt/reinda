@@ -121,6 +121,15 @@ impl EmbeddedEntry {
             _ => None,
         }
     }
+
+    /// Returns the files in this entry. If it's a single file, the returned
+    /// iterator contains one item, otherwise it's like [`EmbeddedGlob::files`].
+    pub fn files(&self) -> impl Iterator<Item = &EmbeddedFile> {
+        match self {
+            EmbeddedEntry::Single(f) => std::slice::from_ref(f).iter(),
+            EmbeddedEntry::Glob(glob) => glob.files.iter(),
+        }
+    }
 }
 
 impl From<EmbeddedGlob> for EmbeddedEntry {
