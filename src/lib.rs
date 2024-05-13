@@ -299,6 +299,10 @@ impl<'a> ModifierContext<'a> {
             );
         })
     }
+
+    pub fn dependencies(&self) -> impl Iterator<Item = &'a str> {
+        self.declared_deps.iter().map(|cow| cow.as_ref())
+    }
 }
 
 // =========================================================================================
