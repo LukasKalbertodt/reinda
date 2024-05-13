@@ -234,10 +234,19 @@ impl Assets {
         self.0.get(http_path)
     }
 
-    // /// Returns an iterator over all assets. *Note*: for files embedded via glob, only  TODO
-    // pub fn assets(&self) -> impl Iterator<Item = &Asset> {
-    //     self.assets.values()
-    // }
+    /// Returns the number of assets. For glob patterns, see [`Self::iter`] for
+    /// details. This method always returns the same number as `self.iter
+    /// ().count()` (only faster).
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// Returns an iterator over all assets. *Note*: for assets included via
+    /// glob pattern, this iterator only returns those found at compile time.
+    /// This does *not* perform a glob walk over directories.
+    pub fn iter(&self) -> impl '_ + Iterator<Item = Asset> {
+        self.0.iter()
+    }
 }
 
 

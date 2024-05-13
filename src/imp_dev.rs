@@ -83,6 +83,14 @@ impl AssetsInner {
                 assets: self.0.clone(),
             }))
     }
+
+    pub(crate) fn len(&self) -> usize {
+        self.0.assets.len()
+    }
+
+    pub(crate) fn iter(&self) -> impl '_ + Iterator<Item = Asset> {
+        self.0.assets.keys().flat_map(move |key| self.get(key))
+    }
 }
 
 impl AssetsEvenMoreInner {
