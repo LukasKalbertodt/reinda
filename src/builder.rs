@@ -22,11 +22,11 @@ pub struct EntryBuilder<'a> {
 #[derive(Debug)]
 pub(crate) enum EntryBuilderKind<'a> {
     Single {
-        http_path: &'a str,
+        http_path: Cow<'a, str>,
         source: DataSource,
     },
     Glob {
-        http_prefix: &'a str,
+        http_prefix: Cow<'a, str>,
         #[cfg_attr(prod_mode, allow(dead_code))]
         glob: SplitGlob,
         files: Vec<GlobFile>,
@@ -44,12 +44,12 @@ pub(crate) struct GlobFile {
 impl<'a> Builder<'a> {
     pub fn add_file(
         &mut self,
-        http_path: &'a str,
+        http_path: impl Into<Cow<'a, str>>,
         fs_path: impl Into<PathBuf>,
     ) -> &mut EntryBuilder<'a> {
         self.assets.push(EntryBuilder {
             kind: EntryBuilderKind::Single {
-                http_path,
+                http_path: http_path.into(),
                 source: DataSource::File(fs_path.into()),
             },
             path_hash: PathHash::None,
@@ -60,12 +60,12 @@ impl<'a> Builder<'a> {
 
     pub fn add_embedded_file(
         &mut self,
-        http_path: &'a str,
+        http_path: impl Into<Cow<'a, str>>,
         file: &EmbeddedFile,
     ) -> &mut EntryBuilder<'a> {
         self.assets.push(EntryBuilder {
             kind: EntryBuilderKind::Single {
-                http_path,
+                http_path: http_path.into(),
                 source: file.data_source(),
             },
             path_hash: PathHash::None,
@@ -76,17 +76,17 @@ impl<'a> Builder<'a> {
 
     pub fn add_embedded_glob(
         &mut self,
-        http_path: &'a str,
+        http_path: impl Into<Cow<'a, str>>,
         glob: &'a EmbeddedGlob,
     ) -> &mut EntryBuilder<'a> {
         let split_glob = SplitGlob::new(glob.pattern);
         self.assets.push(EntryBuilder {
             kind: EntryBuilderKind::Glob {
-                http_prefix: http_path,
+                http_prefix: http_path.into(),
                 files: glob.files.iter().map(|f| GlobFile {
                     // This should never be `None`
                     suffix: f.path.strip_prefix(&split_glob.prefix)
-                        .expect("embedded file path does not start with glob prefx"),
+                        .expect("embedded file path does not start with glob prefix"),
                     source: f.data_source(),
                 }).collect(),
                 glob: split_glob,
@@ -101,7 +101,7 @@ impl<'a> Builder<'a> {
 
     pub fn add_embedded(
         &mut self,
-        http_path: &'a str,
+        http_path: impl Into<Cow<'a, str>>,
         entry: &'a EmbeddedEntry,
     ) -> &mut EntryBuilder<'a> {
         match entry {

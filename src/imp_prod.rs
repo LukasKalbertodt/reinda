@@ -29,7 +29,7 @@ impl AssetsInner {
         for EntryBuilder { kind, path_hash, modifier } in builder.assets {
             match kind {
                 EntryBuilderKind::Single { http_path, source } => {
-                    unresolved.insert(http_path.to_owned(), UnresolvedAsset {
+                    unresolved.insert(http_path.into_owned(), UnresolvedAsset {
                         source,
                         modifier,
                         path_hash,

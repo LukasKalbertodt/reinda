@@ -36,7 +36,7 @@ impl AssetsInner {
         let globs = builder.assets.iter().filter_map(|ab| {
             if let EntryBuilderKind::Glob { http_prefix, glob, base_path, .. } = &ab.kind {
                 Some(DevGlobEntry {
-                    http_prefix: (*http_prefix).to_owned(),
+                    http_prefix: http_prefix.clone().into_owned(),
                     glob: glob.clone(),
                     modifier: ab.modifier.clone(),
                     base_path: Path::new(*base_path),
@@ -51,7 +51,7 @@ impl AssetsInner {
         for ab in builder.assets {
             match ab.kind {
                 EntryBuilderKind::Single { http_path, source } => {
-                    assets.insert(http_path.to_owned(), (source, ab.modifier));
+                    assets.insert(http_path.into_owned(), (source, ab.modifier));
                 }
                 EntryBuilderKind::Glob { http_prefix, files, .. } => {
                     for file in files {
