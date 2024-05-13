@@ -206,6 +206,7 @@ pub mod embed;
 pub mod hash;
 #[cfg(prod_mode)]
 mod dep_graph;
+pub mod util;
 
 #[cfg_attr(prod_mode, path = "imp_prod.rs")]
 #[cfg_attr(dev_mode, path = "imp_dev.rs")]

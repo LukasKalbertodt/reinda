@@ -26,6 +26,7 @@ compress = ["dep:brotli", "reinda-macros/compress"]
 
 [dependencies]
 ahash = "0.8.3"
+aho-corasick = "1.1"
 base64 = { version = "0.22.0", optional = true }
 brotli = { version = "5", optional = true }
 bytes = "1"
