@@ -141,3 +141,9 @@ impl<'a> EntryBuilder<'a> {
         self
     }
 }
+
+impl GlobFile {
+    pub(crate) fn http_path(&self, http_prefix: &str) -> String {
+        format!("{http_prefix}{}", self.suffix)
+    }
+}

@@ -37,7 +37,7 @@ impl AssetsInner {
                 }
                 EntryBuilderKind::Glob { http_prefix, files, .. } => {
                     for file in files {
-                        let key = format!("{http_prefix}{}", file.suffix);
+                        let key = file.http_path(http_prefix.as_ref());
                         let value = UnresolvedAsset {
                             source: file.source,
                             modifier: modifier.clone(),

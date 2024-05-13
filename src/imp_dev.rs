@@ -56,7 +56,7 @@ impl AssetsInner {
                 EntryBuilderKind::Glob { http_prefix, files, .. } => {
                     for file in files {
                         assets.insert(
-                            format!("{http_prefix}/{}", file.suffix),
+                            file.http_path(&http_prefix),
                             (file.source, ab.modifier.clone()),
                         );
                     }
