@@ -1,4 +1,4 @@
-use std::io;
+use std::{borrow::Cow, io};
 
 use ahash::{HashMap, HashMapExt};
 use bytes::Bytes;
@@ -74,6 +74,7 @@ impl AssetsInner {
                 .map_err(|(err, path)| BuildError::Io { err, path: path.to_owned() })?;
             let content = match &asset.modifier {
                 Modifier::None => raw,
+                Modifier::PathFixup(paths) => path_fixup(raw, paths, &path_map),
                 Modifier::Custom { f, deps } => {
                     f(raw, ModifierContext {
                         declared_deps: &deps,
@@ -145,4 +146,21 @@ impl<'a> ModifierContextInner<'a> {
             }
         })
     }
+}
+
+fn path_fixup(original: Bytes, paths: &[Cow<'static, str>], path_map: &PathMap) -> Bytes {
+    use aho_corasick::AhoCorasick;
+
+    let needles = paths.iter()
+        .map(AsRef::as_ref)
+        .filter(|path| path_map.get(path).is_some());
+    let replacer = AhoCorasick::new(needles).unwrap();
+    let mut out = Vec::with_capacity(original.len());
+    replacer.replace_all_with_bytes(&original, &mut out, |_, needle, out| {
+        let needle = std::str::from_utf8(needle).unwrap(); // Input was str
+        let hashed = path_map.get(needle).unwrap(); // we checked this above
+        out.extend_from_slice(hashed.as_bytes());
+        true
+    });
+    out.into()
 }

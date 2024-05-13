@@ -371,6 +371,8 @@ impl DataSource {
 #[derive(Clone)]
 enum Modifier {
     None,
+    #[cfg_attr(dev_mode, allow(dead_code))]
+    PathFixup(Vec<Cow<'static, str>>),
     Custom {
         f: Arc<dyn Send + Sync + Fn(Bytes, ModifierContext) -> Bytes>,
         deps: Vec<Cow<'static, str>>,
@@ -381,6 +383,7 @@ impl std::fmt::Debug for Modifier {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Modifier::None => write!(f, "None"),
+            Modifier::PathFixup(_) => write!(f, "PathFixup"),
             Modifier::Custom { .. } => write!(f, "Custom"),
         }
     }

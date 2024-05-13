@@ -128,6 +128,15 @@ impl<'a> EntryBuilder<'a> {
         self
     }
 
+    pub fn with_path_fixup<D, T>(&mut self, paths: D) -> &mut Self
+    where
+        D: IntoIterator<Item = T>,
+        T: Into<Cow<'static, str>>,
+    {
+        self.modifier = Modifier::PathFixup(paths.into_iter().map(Into::into).collect());
+        self
+    }
+
     pub fn with_modifier<F, D, T>(&mut self, dependencies: D, modifier: F) -> &mut Self
     where
         F: 'static + Send + Sync + Fn(Bytes, ModifierContext) -> Bytes,

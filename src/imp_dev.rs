@@ -129,9 +129,9 @@ impl AssetInner {
         let modified =  match &self.modifier {
             Modifier::None => bytes,
 
-            // // Since in dev mode, hashed paths are not used, no
-            // // modifications are necessary.
-            // Modifier::AutoPathReplacer => bytes,
+            // Since in dev mode, hashed paths are not used, no
+            // modifications are necessary.
+            Modifier::PathFixup(_) => bytes,
 
             // The `PathMap::empty()` might allocate but we are in dev mode,
             // we don't care.
