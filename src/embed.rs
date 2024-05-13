@@ -163,6 +163,7 @@ impl EmbeddedFile {
     /// duplicate work.
     #[cfg(prod_mode)]
     pub fn content(&self) -> std::borrow::Cow<'static, [u8]> {
+        #[cfg(feature = "compress")]
         if self.compressed {
             let mut decompressed = Vec::new();
             brotli::BrotliDecompress(&mut &*self.content, &mut decompressed)
@@ -171,6 +172,9 @@ impl EmbeddedFile {
         } else {
             self.content.into()
         }
+
+        #[cfg(not(feature = "compress"))]
+        { self.content.into() }
     }
 
     pub(crate) fn data_source(&self) -> DataSource {

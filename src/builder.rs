@@ -14,6 +14,7 @@ pub struct Builder<'a> {
 #[derive(Debug)]
 pub struct EntryBuilder<'a> {
     pub(crate) kind: EntryBuilderKind<'a>,
+    #[cfg_attr(not(feature = "hash"), allow(dead_code))]
     pub(crate) path_hash: PathHash<'a>,
     pub(crate) modifier: Modifier,
 }
@@ -26,6 +27,7 @@ pub(crate) enum EntryBuilderKind<'a> {
     },
     Glob {
         http_prefix: &'a str,
+        #[cfg_attr(prod_mode, allow(dead_code))]
         glob: SplitGlob,
         files: Vec<GlobFile>,
         #[cfg(dev_mode)]
@@ -114,11 +116,13 @@ impl<'a> Builder<'a> {
 }
 
 impl<'a> EntryBuilder<'a> {
+    #[cfg(feature = "hash")]
     pub fn with_hash(&mut self) -> &mut Self {
         self.path_hash = PathHash::Auto;
         self
     }
 
+    #[cfg(feature = "hash")]
     pub fn with_hash_between(&mut self, prefix: &'a str, suffix: &'a str) -> &mut Self {
         self.path_hash = PathHash::InBetween { prefix, suffix };
         self

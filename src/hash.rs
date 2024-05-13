@@ -1,49 +1,91 @@
 use bytes::Bytes;
-use reinda_core::AssetDef;
 
+use crate::PathHash;
+
+
+pub(crate) struct PathMap<'a> {
+    #[cfg(feature = "hash")]
+    map: ahash::HashMap<&'a str, String>,
+
+    #[cfg(not(feature = "hash"))]
+    map: std::marker::PhantomData<&'a ()>,
+}
+
+impl<'a> PathMap<'a> {
+    pub(crate) fn new() -> Self {
+        #[cfg(feature = "hash")]
+        { Self { map: ahash::HashMap::default() } }
+
+        #[cfg(not(feature = "hash"))]
+        { Self { map: std::marker::PhantomData } }
+    }
+
+    pub(crate) fn get(&self, path: &str) -> Option<&str> {
+        #[cfg(feature = "hash")]
+        { self.map.get(path).map(|s| &**s) }
+
+        #[cfg(not(feature = "hash"))]
+        {
+            let _path = path;
+            None
+        }
+    }
+}
 
 #[cfg(not(feature = "hash"))]
-pub(crate) fn hashed_path_of(_: &AssetDef, _: &Bytes) -> String {
-    // The `assets!` macro should error if an asset specifies `hash`.
-    unreachable!("`hash_path_of` called, but Cargo-feature 'hash' is disabled.");
+pub(crate) fn path_of<'a>(
+    _: PathHash<'_>,
+    path: &'a str,
+    _: &Bytes,
+    _: &mut PathMap<'a>,
+) -> String {
+    path.to_owned()
 }
 
 
 #[cfg(feature = "hash")]
-pub(crate) fn hashed_path_of(def: &AssetDef, content: &Bytes) -> String {
-    use std::path::Path;
+pub(crate) fn path_of<'a>(
+    hash: PathHash<'_>,
+    path: &'a str,
+    content: &Bytes,
+    map: &mut PathMap<'a>,
+) -> String {
     use sha2::{Digest, Sha256};
     use base64::Engine;
 
+
     /// How many bytes of the 32 byte (256 bit) hash are used and encoded in the
-    /// filename.
+    /// filename. We use a multiple of 9, as base64 encodes 3 bytes with 4
+    /// chars. With a multiple of 3 input bytes, we do not waste base64 chars.
     const HASH_BYTES_IN_FILENAME: usize = 9;
 
 
-    let (first, second) = def.hash.expect("called `hashed_path_of`, but `def.hash` is None");
+    let (first_part, hash_prefix, second_part) = match hash {
+        PathHash::None => return path.to_owned(),
+        PathHash::Auto => {
+            let last_seg_start = path.rfind('/').map(|p| p + 1).unwrap_or(0);
+            let (pos, hash_prefix) = match path[last_seg_start..].find('.') {
+                Some(pos) => (last_seg_start + pos, '.'),
+                None => (path.len(), '-'),
+            };
 
-    let mut out = String::new();
+            (&path[..pos], Some(hash_prefix), &path[pos..])
+        },
+        PathHash::InBetween { prefix, suffix } => (prefix, None, suffix),
+    };
 
-    // First add the parent directory, if any.
-    if let Some(parent) = Path::new(def.path).parent() {
-        if parent.iter().count() > 0 {
-            out.push_str(parent.to_str().unwrap());
-            out.push('/');
-        }
-    }
-
-    // Next, the first part of the filename.
-    out.push_str(first);
-
-    // Calc and then base64 encode the hash.
+    // Calculate hash
     let hash = Sha256::digest(&content);
-    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode_string(
-        &hash.as_slice()[..HASH_BYTES_IN_FILENAME],
-        &mut out,
-    );
 
-    // Finally the second part of the filename
-    out.push_str(second);
+    // Concat everything including the base64 encoded hash
+    let mut out = first_part.to_owned();
+    out.extend(hash_prefix);
+    base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .encode_string(&hash.as_slice()[..HASH_BYTES_IN_FILENAME], &mut out);
+    out.push_str(second_part);
+
+    // Add entry to path map
+    map.map.insert(path, out.clone());
 
     out
 }

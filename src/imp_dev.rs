@@ -49,7 +49,6 @@ impl AssetsInner {
         // Collect all files we know about.
         let mut assets = HashMap::with_capacity(builder.assets.len());
         for ab in builder.assets {
-            dbg!(&ab);
             match ab.kind {
                 EntryBuilderKind::Single { http_path, source } => {
                     assets.insert(http_path.to_owned(), (source, ab.modifier));
@@ -75,7 +74,7 @@ impl AssetsInner {
             // and if so, we check the file system.
             .or_else(|| {
                 self.0.match_globs(http_path)
-                    .filter(|(path, _)| dbg!(path.exists()))
+                    .filter(|(path, _)| path.exists())
                     .map(|(path, modifier)| (DataSource::File(path), modifier))
             })
             .map(|(source, modifier)| Asset(AssetInner {

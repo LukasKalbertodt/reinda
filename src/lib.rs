@@ -200,15 +200,17 @@ use std::{borrow::Cow, fmt, io, path::{Path, PathBuf}, sync::Arc};
 
 use bytes::Bytes;
 
-pub mod embed;
 pub mod builder;
+pub mod embed;
+#[cfg(prod_mode)]
+pub mod hash;
+#[cfg(prod_mode)]
+mod dep_graph;
 
 #[cfg_attr(prod_mode, path = "imp_prod.rs")]
 #[cfg_attr(dev_mode, path = "imp_dev.rs")]
 mod imp;
 
-#[cfg(prod_mode)]
-mod dep_graph;
 
 
 pub use self::{
@@ -253,22 +255,6 @@ impl Asset {
     pub async fn content(&self) -> Result<Bytes, io::Error> {
         self.0.content().await
     }
-
-    // /// Returns the already loaded contents of this asset, or `None` if the
-    // /// contents were not loaded yet. In prod mode, this always returns `Some
-    // /// (_)`. In dev mode, this only returns `Some(_)` for assets TODO.
-    // pub fn loaded_content(&self) -> Option<&Bytes> {
-    //     match &self.content {
-    //         AssetContent::Loaded(bytes) => Some(bytes),
-    //         AssetContent::File(_) => None,
-    //     }
-    // }
-
-    // /// Returns the HTTP path under which this asset is reachable, i.e. the
-    // /// value that has to be passed to [`Assets::get`] to retrieve this asset.
-    // pub fn http_path(&self) -> &str {
-    //     todo!()
-    // }
 
     pub fn is_filename_hashed(&self) -> bool {
         self.0.is_filename_hashed()
@@ -339,6 +325,7 @@ impl std::error::Error for BuildError {}
 // =========================================================================================
 
 #[derive(Debug, Clone, Copy)]
+#[cfg_attr(any(dev_mode, not(feature = "hash")), allow(dead_code))]
 enum PathHash<'a> {
     None,
     Auto,
@@ -351,6 +338,7 @@ enum PathHash<'a> {
 #[derive(Debug, Clone)]
 enum DataSource {
     File(PathBuf),
+    #[cfg_attr(dev_mode, allow(dead_code))]
     Loaded(Bytes),
 }
 
@@ -394,6 +382,7 @@ struct SplitGlob {
 
     /// The second part of the glob, starting with a segment having glob meta
     /// characters.
+    #[cfg_attr(prod_mode, allow(dead_code))]
     suffix: glob::Pattern,
 }
 

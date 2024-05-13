@@ -34,15 +34,6 @@ impl<'a> DepGraph<'a> {
         self.0.entry(dependee).or_default().rev_dependencies.insert(depender);
     }
 
-    /// Returns an iterator over all assets which `asset` directly depends on.
-    #[cfg(all(debug_assertions, not(feature = "debug-is-prod")))] // only used in dev-builds
-    pub(crate) fn dependencies_of(&self, asset: &'a str) -> impl '_ + Iterator<Item = &'a str> {
-        self.0.get(&asset)
-            .map(|data| data.dependencies.iter().copied())
-            .into_iter()
-            .flatten()
-    }
-
     /// Returns a topological sorting of this dependency graph.
     ///
     /// The first element of the returned list does not have any dependencies.
