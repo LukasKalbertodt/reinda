@@ -1,4 +1,4 @@
-use std::{fmt, path::{Path, PathBuf}};
+use std::path::{Path, PathBuf};
 use glob::glob;
 
 use proc_macro2::{Span, TokenStream};
@@ -18,46 +18,85 @@ pub(crate) fn emit(input: Input) -> Result<TokenStream, Error> {
     // but that's not supported.
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
         .expect("CARGO_MANIFEST_DIR not set");
-    let manifest_dir = glob::Pattern::escape(&manifest_dir);
     let manifest_dir = Path::new(&manifest_dir);
     let base = match &config.base_path {
-        Some(base_path) => manifest_dir.join(&glob::Pattern::escape(base_path)),
+        Some(base_path) => manifest_dir.join(&base_path),
         None => PathBuf::from(manifest_dir),
     };
+    let base_str = base.to_str()
+        .ok_or_else(|| err!("base path or CARGO_MANIFEST_DIR is not valid UTF-8"))?;
+    let escaped_base = glob::Pattern::escape(&base_str);
+    let escaped_base = Path::new(&escaped_base);
 
     let mut stats = Stats::default();
-    let mut files = Vec::new();
-    for (glob_pattern, span) in &config.files {
+    let mut entries = Vec::new();
+    for (path, span) in &config.files {
         let utf8_err = || err!(@span, "path is not valid UTF-8");
 
-        // Construct full path.
-        let full_path = base.join(glob_pattern).to_str().ok_or_else(utf8_err)?.to_owned();
+        match Globness::check(path) {
+            Globness::NotGlob(unescaped) => {
+                let full_path = base.join(&unescaped).to_str().ok_or_else(utf8_err)?.to_owned();
+                let embed_tokens = embed(&unescaped, span, &full_path, &config, &mut stats)?;
 
-        // Iterate over all files matching the glob pattern.
-        let entries = glob(&full_path).map_err(|e| err!(@span, "invalid glob pattern: {e}"))?;
-        for entry in entries {
-            let file_path = entry
-                .map_err(|e| err!(@span, "IO error while walking glob paths: {e}"))?;
-            let short_path = file_path.strip_prefix(&base)
-                .unwrap_or(&file_path)
-                .to_str()
-                .ok_or_else(utf8_err)?;
-            let file_path = file_path.to_str().ok_or_else(utf8_err)?;
+                entries.push(quote! {
+                    reinda::EmbeddedEntry::Single(
+                        reinda::EmbeddedFile {
+                            #embed_tokens
+                            path: #unescaped,
+                        }
+                    )
+                });
+            }
 
-            // Load file the current build mode says so.
-            let embed_tokens = embed(short_path, span, file_path, &config, &mut stats)?;
+            Globness::Glob => {
+                // Construct full path.
+                let full_path = escaped_base.join(path).to_str().ok_or_else(utf8_err)?.to_owned();
 
-            files.push(quote! {
-                reinda::EmbeddedFile {
-                    #embed_tokens
-                    glob: #glob_pattern,
-                    path: #short_path,
+                // Iterate over all files matching the glob pattern.
+                let glob_walker = glob(&full_path)
+                    .map_err(|e| err!(@span, "invalid glob pattern: {e}"))?;
+                let mut files = Vec::new();
+                for entry in glob_walker {
+                    let file_path = entry
+                        .map_err(|e| err!(@span, "IO error while walking glob paths: {e}"))?;
+                    let short_path = file_path.strip_prefix(&base)
+                        .unwrap_or(&file_path)
+                        .to_str()
+                        .ok_or_else(utf8_err)?;
+                    let file_path = file_path.to_str().ok_or_else(utf8_err)?;
+
+                    // Load file the current build mode says so.
+                    let embed_tokens = embed(short_path, span, file_path, &config, &mut stats)?;
+
+                    files.push(quote! {
+                        reinda::EmbeddedFile {
+                            #embed_tokens
+                            path: #short_path,
+                        }
+                    });
                 }
-            });
+
+                let base_path_tokens = if cfg!(prod_mode) {
+                    quote! {}
+                } else {
+                    quote! {
+                        base_path: #base_str,
+                    }
+                };
+
+                entries.push(quote! {
+                    reinda::EmbeddedEntry::Glob(reinda::EmbeddedGlob {
+                        pattern: #path,
+                        #base_path_tokens
+                        files: &[ #(#files ,)* ],
+                    })
+                });
+            }
         }
     }
 
     if config.print_stats {
+        #[cfg(prod_mode)]
         println!(
             "[reinda] Summary: embedded {} files ({} stored in compressed form), \
                 totalling {} ({} when uncompressed)",
@@ -66,16 +105,61 @@ pub(crate) fn emit(input: Input) -> Result<TokenStream, Error> {
             ByteSize(stats.compressed_size),
             ByteSize(stats.uncompressed_size),
         );
+
+        #[cfg(dev_mode)]
+        println!("[reinda] Summary: in dev mode -> no files embedded");
     }
+
+
 
     Ok(quote! {
         reinda::Embeds {
-            files: &[ #(#files ,)* ],
+            entries: &[ #(#entries ,)* ],
         }
     })
 }
 
+#[cfg_attr(test, derive(PartialEq, Debug))]
+enum Globness {
+    NotGlob(String),
+    Glob,
+}
+
+impl Globness {
+    fn check(s: &str) -> Self {
+        let mut unescaped = String::new();
+        let mut offset = 0;
+        while let Some(i) = s[offset..].find(&['?', '*', '[', ']']) {
+            // Push the preceeding uninteresting part to the output string.
+            unescaped.push_str(&s[offset..][..i]);
+
+            // We found a meta character. The only way the input string isn't a
+            // glob is if this is a start of a simple escaped meta character.
+            // In that case, we undo the escaping.
+            match () {
+                () if s[offset + i..].starts_with("[?]") => unescaped.push('?'),
+                () if s[offset + i..].starts_with("[*]") => unescaped.push('*'),
+                () if s[offset + i..].starts_with("[]]") => unescaped.push(']'),
+                () if s[offset + i..].starts_with("[[]") => unescaped.push('['),
+                _ => return Self::Glob,
+            }
+
+            // The only way we reach this if we encountered the escaped meta
+            // character, so we advance by 3.
+            offset += i + 3;
+        }
+
+        // Push the rest.
+        unescaped.push_str(&s[offset..]);
+
+        // We have not encountered meta characters, except simple escapes.
+        Self::NotGlob(unescaped)
+    }
+}
+
+
 #[derive(Default)]
+#[allow(dead_code)]
 struct Stats {
     uncompressed_size: usize,
     compressed_size: usize,
@@ -83,19 +167,20 @@ struct Stats {
     embedded_compressed: u32,
 }
 
-#[cfg(not(any(not(debug_assertions), feature = "always-embed")))]
+#[cfg(dev_mode)]
 fn embed(
     _: &str,
     _: &Span,
-    _: &str,
+    full_path: &str,
     _: &EmbedConfig,
     _: &mut Stats,
 ) -> Result<TokenStream, Error> {
-
-    Ok(quote!{})
+    Ok(quote! {
+        full_path: #full_path,
+    })
 }
 
-#[cfg(any(not(debug_assertions), feature = "always-embed"))]
+#[cfg(prod_mode)]
 fn embed(
     path: &str,
     span: &Span,
@@ -176,10 +261,12 @@ fn embed(
     })
 }
 
+#[cfg(prod_mode)]
 struct ByteSize(usize);
 
-impl fmt::Display for ByteSize {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+#[cfg(prod_mode)]
+impl std::fmt::Display for ByteSize {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.0 > 1500 * 1024 {
             write!(f, "{:.1}MiB", (self.0 / 1024) as f32 / 1024.0)
         } else if self.0 > 1500 {
@@ -187,5 +274,24 @@ impl fmt::Display for ByteSize {
         } else {
             write!(f, "{}B", self.0)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Globness;
+
+    #[test]
+    fn glob_classification() {
+        assert_eq!(Globness::check("foo.txt"), Globness::NotGlob("foo.txt".into()));
+        assert_eq!(Globness::check("bar/foo.txt"), Globness::NotGlob("bar/foo.txt".into()));
+        assert_eq!(Globness::check("fo[?]x.svg"), Globness::NotGlob("fo?x.svg".into()));
+        assert_eq!(Globness::check("fo[*]x.svg"), Globness::NotGlob("fo*x.svg".into()));
+        assert_eq!(Globness::check("fo[]]x.svg"), Globness::NotGlob("fo]x.svg".into()));
+        assert_eq!(Globness::check("fo[[]x.svg"), Globness::NotGlob("fo[x.svg".into()));
+
+        assert_eq!(Globness::check("fo*x.svg"), Globness::Glob);
+        assert_eq!(Globness::check("fo?x.svg"), Globness::Glob);
+        assert_eq!(Globness::check("fo[ab]x.svg"), Globness::Glob);
     }
 }

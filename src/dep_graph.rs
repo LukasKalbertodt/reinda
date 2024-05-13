@@ -1,44 +1,42 @@
 use std::{collections::VecDeque, mem};
-use ahash::{AHashMap, AHashSet};
-
-use reinda_core::AssetId;
+use ahash::{HashMap, HashMapExt, HashSet};
 
 
 #[derive(Debug)]
-pub(crate) struct DepGraph(AHashMap<AssetId, NodeData>);
+pub(crate) struct DepGraph<'a>(HashMap<&'a str, NodeData<'a>>);
 
 #[derive(Default)]
 #[derive(Debug)]
-struct NodeData {
+struct NodeData<'a> {
     /// List of assets this asset depends on.
-    dependencies: AHashSet<AssetId>,
+    dependencies: HashSet<&'a str>,
 
     /// Set of assets that are dependant on this asset.
-    rev_dependencies: AHashSet<AssetId>,
+    rev_dependencies: HashSet<&'a str>,
 }
 
-impl DepGraph {
+impl<'a> DepGraph<'a> {
     pub(crate) fn new() -> Self {
-        Self(AHashMap::new())
+        Self(HashMap::new())
     }
 
     /// Explicitly adds an asset to the graph. This makes sure this asset is
     /// included in the topological sort. It is as if it would register an
     /// external dependency on `id`. Assets are automatically created when you
     /// call `add_dependency`.
-    pub(crate) fn add_asset(&mut self, id: AssetId) {
+    pub(crate) fn add_asset(&mut self, id: &'a str) {
         self.0.entry(id).or_default();
     }
 
     /// Adds one edge to this graph: `depender` depends on `dependee`.
-    pub(crate) fn add_dependency(&mut self, depender: AssetId, dependee: AssetId) {
+    pub(crate) fn add_dependency(&mut self, depender: &'a str, dependee: &'a str) {
         self.0.entry(depender).or_default().dependencies.insert(dependee);
         self.0.entry(dependee).or_default().rev_dependencies.insert(depender);
     }
 
     /// Returns an iterator over all assets which `asset` directly depends on.
     #[cfg(all(debug_assertions, not(feature = "debug-is-prod")))] // only used in dev-builds
-    pub(crate) fn dependencies_of(&self, asset: AssetId) -> impl '_ + Iterator<Item = AssetId> {
+    pub(crate) fn dependencies_of(&self, asset: &'a str) -> impl '_ + Iterator<Item = &'a str> {
         self.0.get(&asset)
             .map(|data| data.dependencies.iter().copied())
             .into_iter()
@@ -51,7 +49,7 @@ impl DepGraph {
     /// In general, dependencies can simply be resolved by iterating over the
     /// returned list forwards. If the graph is not a DAG, a vector containing
     /// one cycle is returned.
-    pub(crate) fn topological_sort(mut self) -> Result<Vec<AssetId>, Vec<AssetId>> {
+    pub(crate) fn topological_sort(mut self) -> Result<Vec<&'a str>, Vec<&'a str>> {
         // This is an implementation of Kahn's algorithm.
 
         let mut queue: VecDeque<_> = self.0.iter()
@@ -62,10 +60,10 @@ impl DepGraph {
         let mut pos = 0;
         while let Some(&dependee_id) = queue.get(pos) {
             pos += 1;
-            let rev_deps = mem::take(&mut self.node_mut(dependee_id).rev_dependencies).into_iter();
+            let rev_deps = mem::take(&mut self.0.get_mut(&dependee_id).unwrap().rev_dependencies).into_iter();
 
             for depender_id in rev_deps {
-                let depender = self.node_mut(depender_id);
+                let depender = self.0.get_mut(&depender_id).unwrap();
                 let was_removed = depender.dependencies.remove(&dependee_id);
                 debug_assert!(was_removed);
 
@@ -103,20 +101,16 @@ impl DepGraph {
             }
         }
     }
-
-    fn node_mut(&mut self, id: AssetId) -> &mut NodeData {
-        self.0.get_mut(&id).unwrap()
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn graph(edges: &[(u32, u32)]) -> DepGraph {
+    fn graph<'a>(edges: &[(&'a str, &'a str)]) -> DepGraph<'a> {
         let mut g = DepGraph::new();
         for &(from, to) in edges {
-            g.add_dependency(AssetId(from), AssetId(to));
+            g.add_dependency(from, to);
         }
         g
     }
@@ -128,7 +122,7 @@ mod tests {
         ) => {
             let actual = graph(&[$( ($from, $to) ),*]).topological_sort();
             let valid = [
-                $( $res(vec![$(AssetId($id)),*]) ),*,
+                $( $res(vec![$($id),*]) ),*,
             ];
 
             if !valid.contains(&actual) {
@@ -145,32 +139,33 @@ mod tests {
 
     #[test]
     fn topological_sort_dag() {
-        assert_topsort!([0 <- 1] => Ok([1, 0]));
-        assert_topsort!([1 <- 0] => Ok([0, 1]));
+        assert_topsort!(["a" <- "b"] => Ok(["b", "a"]));
+        assert_topsort!(["b" <- "a"] => Ok(["a", "b"]));
 
-        assert_topsort!([1 <- 0, 2 <- 1] => Ok([0, 1, 2]));
-        assert_topsort!([2 <- 9, 0 <- 2] => Ok([9, 2, 0]));
+        assert_topsort!(["b" <- "a", "c" <- "b"] => Ok(["a", "b", "c"]));
+        assert_topsort!(["c" <- "f", "a" <- "c"] => Ok(["f", "c", "a"]));
 
-        assert_topsort!([0 <- 1, 0 <- 2] => Ok([1, 2, 0], [2, 1, 0]));
+        assert_topsort!(["a" <- "b", "a" <- "c"] => Ok(["b", "c", "a"], ["c", "b", "a"]));
     }
 
     #[test]
     fn topological_sort_cycles() {
         assert_topsort!(
-            [0 <- 1, 1 <- 2, 2 <- 0, 0 <- 4]
-            => Err([0, 1, 2], [1, 2, 0], [2, 0, 1])
+            ["a" <- "b", "b" <- "c", "c" <- "a", "a" <- "e"]
+            => Err(["a", "b", "c"], ["b", "c", "a"], ["c", "a", "b"])
         );
 
         assert_topsort!(
             [
-                0 <- 1, 1 <- 2, 2 <- 0,
-                1 <- 3, 3 <- 2,
-                3 <- 4, 4 <- 5,
+                "a" <- "b", "b" <- "c", "c" <- "a",
+                "b" <- "d", "d" <- "c",
+                "d" <- "e", "e" <- "f",
             ]
             => Err(
-                [0, 1, 2], [1, 2, 0], [2, 0, 1],
-                [3, 1, 2], [1, 2, 3], [2, 3, 1],
-                [0, 1, 3, 2], [1, 3, 2, 0], [3, 2, 0, 1], [2, 0, 1, 3],
+                ["a", "b", "c"], ["b", "c", "a"], ["c", "a", "b"],
+                ["d", "b", "c"], ["b", "c", "d"], ["c", "d", "b"],
+                ["a", "b", "d", "c"], ["b", "d", "c", "a"],
+                ["d", "c", "a", "b"], ["c", "a", "b", "d"],
             )
         );
     }

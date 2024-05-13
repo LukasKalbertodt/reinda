@@ -193,76 +193,254 @@
 //!   the `assets!` macro. Cargo does this automatically. But if you, for some
 //!   reason, compile manually with `rustc`, you have to set that value.
 
-#![deny(missing_debug_implementations)]
+// TODO
+// #![deny(missing_debug_implementations)]
 
-//! TODO
-pub use reinda_macros::embed;
+use std::{borrow::Cow, fmt, io, path::{Path, PathBuf}, sync::Arc};
 
-#[derive(Debug)]
-pub struct Embeds {
-    #[doc(hidden)]
-    pub files: &'static [EmbeddedFile],
-}
+use bytes::Bytes;
 
-#[derive(Debug)]
-pub struct EmbeddedFile {
-    #[doc(hidden)]
-    pub path: &'static str,
+pub mod embed;
+pub mod builder;
 
-    /// The glob pattern that was specified in the macro. Is equal to `path` for
-    /// simple entries without glob pattern syntax.
-    #[doc(hidden)]
-    pub glob: &'static str,
+#[cfg_attr(prod_mode, path = "imp_prod.rs")]
+#[cfg_attr(dev_mode, path = "imp_dev.rs")]
+mod imp;
 
-    /// The actual file contents.
-    #[cfg(any(not(debug_assertions), feature = "always-embed"))]
-    #[doc(hidden)]
-    pub content: &'static [u8],
+#[cfg(prod_mode)]
+mod dep_graph;
 
-    /// Whether the `content` field is compressed.
-    #[cfg(any(not(debug_assertions), feature = "always-embed"))]
-    #[doc(hidden)]
-    pub compressed: bool,
-}
 
-impl Embeds {
-    pub fn files(&self) -> impl Iterator<Item = &'static EmbeddedFile> {
-        self.files.iter()
+pub use self::{
+    builder::{Builder, EntryBuilder},
+    embed::{EmbeddedEntry, EmbeddedFile, EmbeddedGlob, Embeds, embed},
+};
+
+
+/// A collection of assets, defined as a map from HTTP path to asset. Basically
+/// a virtual file system.
+///
+/// TODO: explain more
+pub struct Assets(imp::AssetsInner);
+
+impl Assets {
+    pub fn builder<'a>() -> Builder<'a> {
+        Builder { assets: vec![] }
     }
 
+    pub fn get(&self, http_path: &str) -> Option<Asset> {
+        self.0.get(http_path)
+    }
+
+    // /// Returns an iterator over all assets. *Note*: for files embedded via glob, only  TODO
+    // pub fn assets(&self) -> impl Iterator<Item = &Asset> {
+    //     self.assets.values()
+    // }
 }
 
-impl EmbeddedFile {
-    /// Returns the relative path of the embedded file, with the base path
-    /// stripped. When not using glob patterns, this is exactly the string you
-    /// specified inside the `embed!` macro.
+
+/// An asset.
+///
+/// Very cheap to clone (in prod mode anyway, which is the only thing that
+/// matters).
+#[derive(Clone)]
+pub struct Asset(imp::AssetInner);
+
+impl Asset {
+    /// Returns the contents of this asset. Will be loaded from the file system
+    /// in dev mode, potentially returning IO errors. In prod mode, the file
+    /// contents are already loaded and this method always returns `Ok(_)`.
+    pub async fn content(&self) -> Result<Bytes, io::Error> {
+        self.0.content().await
+    }
+
+    // /// Returns the already loaded contents of this asset, or `None` if the
+    // /// contents were not loaded yet. In prod mode, this always returns `Some
+    // /// (_)`. In dev mode, this only returns `Some(_)` for assets TODO.
+    // pub fn loaded_content(&self) -> Option<&Bytes> {
+    //     match &self.content {
+    //         AssetContent::Loaded(bytes) => Some(bytes),
+    //         AssetContent::File(_) => None,
+    //     }
+    // }
+
+    // /// Returns the HTTP path under which this asset is reachable, i.e. the
+    // /// value that has to be passed to [`Assets::get`] to retrieve this asset.
+    // pub fn http_path(&self) -> &str {
+    //     todo!()
+    // }
+
+    pub fn is_filename_hashed(&self) -> bool {
+        self.0.is_filename_hashed()
+    }
+}
+
+
+pub struct ModifierContext<'a> {
+    declared_deps: &'a [Cow<'static, str>],
+    inner: imp::ModifierContextInner<'a>,
+}
+
+impl<'a> ModifierContext<'a> {
+    /// Resolves to the actual asset HTTP path, including hash if configured
+    /// that way.
     ///
-    /// Note: the absolute path of this file is not stored, as including this in
-    /// the binary might leak information about the build system.
-    pub fn path(&self) -> &'static str {
-        self.path
-    }
-
-    /// The entry in the `embed!` macro that lead to the inclusion of this file.
-    /// When not using glob patterns, this is equal to[`Self::path`], otherwise
-    /// this might return `"icons/*.svg"` whereas `path()` would returns
-    /// something specific like `"icons/foo.svg"`.
-    pub fn glob(&self) -> &'static str {
-        self.glob
-    }
-
-    /// Returns the contents of the embedded file. This method might decompress
-    /// data, so try calling it only once for each file to avoid doing
-    /// duplicate work.
-    #[cfg(any(not(debug_assertions), feature = "always-embed"))]
-    pub fn content(&self) -> std::borrow::Cow<'static, [u8]> {
-        if self.compressed {
-            let mut decompressed = Vec::new();
-            brotli::BrotliDecompress(&mut &*self.content, &mut decompressed)
-                .expect("unexpected error while decompressing Brotli");
-            decompressed.into()
-        } else {
-            self.content.into()
+    /// **Panics** if the passed `unhashed_http_path` was not declared as
+    /// dependency in `with_modifier` and refers to an existing asset.
+    pub fn resolve_path<'b>(&'b self, unhashed_http_path: &'b str) -> &'b str {
+        if !self.declared_deps.iter().any(|dep| dep == unhashed_http_path) {
+            panic!(
+                "called `ModifierContext::resolve_path` with '{}', \
+                    but that was not specified as dependency",
+                unhashed_http_path,
+            );
         }
+
+        self.inner.resolve_path(unhashed_http_path).unwrap_or_else(|| {
+            panic!(
+                "called `ModifierContext::resolve_path` with '{}', \
+                    but no asset with that path exists",
+                unhashed_http_path,
+            );
+        })
+    }
+}
+
+// =========================================================================================
+// ===== Error
+// =========================================================================================
+
+#[derive(Debug)]
+#[non_exhaustive]
+pub enum BuildError {
+    Io {
+        err: std::io::Error,
+        path: PathBuf,
+    },
+    CyclicDependencies(Vec<String>),
+}
+
+impl fmt::Display for BuildError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            BuildError::Io { err, path }
+                => write!(f, "IO error while accessing '{}': '{}'", path.display(), err),
+            BuildError::CyclicDependencies(cycle) => write!(f, "cyclic dependencies: {:?}", cycle),
+        }
+    }
+}
+
+impl std::error::Error for BuildError {}
+
+
+
+// =========================================================================================
+// ===== Various types
+// =========================================================================================
+
+#[derive(Debug, Clone, Copy)]
+enum PathHash<'a> {
+    None,
+    Auto,
+    InBetween {
+        prefix: &'a str,
+        suffix: &'a str,
+    },
+}
+
+#[derive(Debug, Clone)]
+enum DataSource {
+    File(PathBuf),
+    Loaded(Bytes),
+}
+
+impl DataSource {
+    async fn load(&self) -> Result<Bytes, (io::Error, &Path)> {
+        match self {
+            DataSource::File(path) => tokio::fs::read(path).await
+                .map(Into::into)
+                .map_err(|err| (err, &**path)),
+            DataSource::Loaded(bytes) => Ok(bytes.clone()),
+        }
+    }
+}
+
+
+#[derive(Clone)]
+enum Modifier {
+    None,
+    Custom {
+        f: Arc<dyn Send + Sync + Fn(Bytes, ModifierContext) -> Bytes>,
+        deps: Vec<Cow<'static, str>>,
+    },
+}
+
+impl std::fmt::Debug for Modifier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Modifier::None => write!(f, "None"),
+            Modifier::Custom { .. } => write!(f, "Custom"),
+        }
+    }
+}
+
+/// A glob patttern split after all leading fixed path segments.
+#[cfg_attr(test, derive(PartialEq, Eq))]
+#[derive(Debug, Clone)]
+struct SplitGlob {
+    /// All leading path segments from the glob that do not contain glob meta
+    /// characters.
+    prefix: &'static str,
+
+    /// The second part of the glob, starting with a segment having glob meta
+    /// characters.
+    suffix: glob::Pattern,
+}
+
+impl SplitGlob {
+    fn new(glob: &'static str) -> Self {
+        let offset = Path::new(glob).components().find_map(|component| {
+            let std::path::Component::Normal(seg) = component else {
+                return None;
+            };
+
+            // We know it came from a `str` so this unwrap is fine.
+            let seg = seg.to_str().unwrap();
+            if seg.contains(&['*', '?', '[', ']']) {
+                return Some(seg.as_ptr() as usize - glob.as_ptr() as usize);
+            }
+
+            None
+        }).unwrap_or(glob.len());
+
+        let (prefix, suffix) = glob.split_at(offset);
+
+        Self {
+            prefix,
+            // The `expect` is fine as the glob was already parsed at compile time.
+            suffix: glob::Pattern::new(suffix).expect("invalid glob"),
+        }
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn split_glob() {
+        macro_rules! check {
+            ($whole:literal => $prefix:literal + $suffix:literal) => {
+                assert_eq!(
+                    SplitGlob::new($whole),
+                    SplitGlob { prefix: $prefix, suffix: glob::Pattern::new($suffix).unwrap() },
+                );
+            };
+        }
+
+        check!("frontend/build/fonts/*.woff2" => "frontend/build/fonts/" + "*.woff2");
+        check!("frontend/**/banana.txt" => "frontend/" + "**/banana.txt");
+        check!("../foo/bar*/*.svg" => "../foo/" + "bar*/*.svg");
     }
 }
