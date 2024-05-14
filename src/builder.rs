@@ -122,8 +122,11 @@ impl<'a> EntryBuilder<'a> {
         self
     }
 
+    // TODO: make public again once its tested.
+    /// Like [`Self::with_hash`], but lets you specify where it insert the hash.
     #[cfg(feature = "hash")]
-    pub fn with_hash_between(&mut self, prefix: &'a str, suffix: &'a str) -> &mut Self {
+    #[allow(dead_code)]
+    fn with_hash_between(&mut self, prefix: &'a str, suffix: &'a str) -> &mut Self {
         self.path_hash = PathHash::InBetween { prefix, suffix };
         self
     }
