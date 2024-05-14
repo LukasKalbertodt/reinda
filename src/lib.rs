@@ -199,10 +199,10 @@ use std::{borrow::Cow, fmt, io, path::{Path, PathBuf}, sync::Arc};
 
 use bytes::Bytes;
 
-pub mod builder;
-pub mod embed;
+mod builder;
+mod embed;
 #[cfg(prod_mode)]
-pub mod hash;
+mod hash;
 #[cfg(prod_mode)]
 mod dep_graph;
 pub mod util;
