@@ -16,7 +16,7 @@ license = "MIT/Apache-2.0"
 proc-macro = true
 
 [features]
-always-embed = []
+always-prod = []
 compress = ["dep:brotli"]
 
 [dependencies]

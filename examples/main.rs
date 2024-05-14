@@ -128,7 +128,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (css_path, style_css) = assets.iter().find(|(path, _)| path.ends_with(".css")).unwrap();
     assert_eq!(
         style_css.is_filename_hashed(),
-        cfg!(any(feature = "always-embed", not(debug_assertions))),
+        cfg!(any(feature = "always-prod", not(debug_assertions))),
     );
     let style_content = style_css.content().await?;
     let style_content = std::str::from_utf8(&style_content).unwrap();

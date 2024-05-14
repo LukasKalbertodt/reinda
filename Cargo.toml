@@ -20,7 +20,7 @@ exclude = [".github"]
 
 [features]
 default = ["compress", "hash"]
-always-embed = ["reinda-macros/always-embed"]
+always-prod = ["reinda-macros/always-prod"]
 hash = ["dep:base64", "dep:sha2"]
 compress = ["dep:brotli", "reinda-macros/compress"]
 
