@@ -1,8 +1,7 @@
-use core::panic;
-
 use reinda::Assets;
 
 
+#[cfg(feature = "hash")]
 macro_rules! assert_get {
     ($assets:expr, $http_path:expr, $hashed:expr, $expected:expr) => {
         let asset = $assets.get($http_path)
@@ -11,7 +10,7 @@ macro_rules! assert_get {
         let content = asset.content().await?;
         let expected = AsRef::<[u8]>::as_ref($expected);
         if content != expected {
-            panic!("Assertion failed: content is unexpected!\n\
+            core::panic!("Assertion failed: content is unexpected!\n\
                 --- expected:\n{}\n\
                 --- actual:\n{}\n",
                 std::str::from_utf8(&expected).unwrap_or("binary file"),
