@@ -9,8 +9,10 @@ use crate::{
 };
 
 
+#[derive(Debug, Clone)]
 pub(crate) struct AssetsInner(Arc<AssetsEvenMoreInner>);
 
+#[derive(Debug, Clone)]
 pub(crate) struct AssetsEvenMoreInner {
     /// All specified assets, but not yet loaded.
     assets: HashMap<String, (DataSource, Modifier)>,
@@ -23,6 +25,7 @@ pub(crate) struct AssetsEvenMoreInner {
     globs: Vec<DevGlobEntry>,
 }
 
+#[derive(Debug, Clone)]
 struct DevGlobEntry {
     http_prefix: String,
     glob: SplitGlob,
@@ -111,7 +114,7 @@ impl AssetsEvenMoreInner {
 ///
 /// Very cheap to clone (in prod mode anyway, which is the only thing that
 /// matters).
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub(crate) struct AssetInner {
     source: DataSource,
     modifier: Modifier,
@@ -153,6 +156,7 @@ impl AssetInner {
 }
 
 
+#[derive(Debug)]
 pub(crate) struct ModifierContextInner<'a> {
     assets: Arc<AssetsEvenMoreInner>,
     _dummy: PhantomData<&'a ()>,

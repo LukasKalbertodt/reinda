@@ -3,6 +3,7 @@ use bytes::Bytes;
 use crate::PathHash;
 
 
+#[derive(Debug)]
 pub(crate) struct PathMap<'a> {
     #[cfg(feature = "hash")]
     map: ahash::HashMap<&'a str, String>,

@@ -1,4 +1,4 @@
-use std::{borrow::Cow, io};
+use std::{borrow::Cow, fmt, io};
 
 use ahash::{HashMap, HashMapExt};
 use bytes::Bytes;
@@ -11,12 +11,13 @@ use crate::{
 };
 
 
+#[derive(Clone)]
 pub(crate) struct AssetsInner {
     assets: HashMap<String, Asset>,
 }
 
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub(crate) struct AssetInner {
     content: Bytes,
     hashed_filename: bool,
@@ -117,6 +118,12 @@ impl AssetsInner {
     }
 }
 
+impl fmt::Debug for AssetsInner {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.assets.keys().fmt(f)
+    }
+}
+
 impl AssetInner {
     /// Returns the contents of this asset. Will be loaded from the file system
     /// in dev mode, potentially returning IO errors. In prod mode, the file
@@ -131,12 +138,14 @@ impl AssetInner {
 }
 
 
+#[derive(Debug)]
 struct UnresolvedAsset<'a> {
     source: DataSource,
     modifier: Modifier,
     path_hash: PathHash<'a>,
 }
 
+#[derive(Debug)]
 pub(crate) struct ModifierContextInner<'a> {
     path_map: &'a PathMap<'a>,
     unresolved: &'a HashMap<String, UnresolvedAsset<'a>>,

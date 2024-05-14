@@ -193,8 +193,7 @@
 //!   the `assets!` macro. Cargo does this automatically. But if you, for some
 //!   reason, compile manually with `rustc`, you have to set that value.
 
-// TODO
-// #![deny(missing_debug_implementations)]
+#![deny(missing_debug_implementations)]
 
 use std::{borrow::Cow, fmt, io, path::{Path, PathBuf}, sync::Arc};
 
@@ -224,6 +223,7 @@ pub use self::{
 /// a virtual file system.
 ///
 /// TODO: explain more
+#[derive(Debug, Clone)]
 pub struct Assets(imp::AssetsInner);
 
 impl Assets {
@@ -255,7 +255,7 @@ impl Assets {
 ///
 /// Very cheap to clone (in prod mode anyway, which is the only thing that
 /// matters).
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Asset(imp::AssetInner);
 
 impl Asset {
@@ -272,6 +272,7 @@ impl Asset {
 }
 
 
+#[derive(Debug)]
 pub struct ModifierContext<'a> {
     declared_deps: &'a [Cow<'static, str>],
     inner: imp::ModifierContextInner<'a>,
