@@ -1,1 +1,0 @@
-x {{: include:a.txt :}} y {{: include:b.txt :}} z

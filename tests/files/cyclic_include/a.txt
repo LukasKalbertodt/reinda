@@ -1,1 +1,0 @@
-a {{: include:b.txt :}}
