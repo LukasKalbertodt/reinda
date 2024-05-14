@@ -217,3 +217,6 @@ async fn use_case_web() -> Result<(), Box<dyn std::error::Error>> {
 // TODO:
 // - cyclic dependencies
 // - missing dependencies (modifier asks for other path)
+// - `with_hash_between`
+// - dynamically load file
+// - escaped globs

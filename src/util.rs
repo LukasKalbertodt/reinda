@@ -1,6 +1,11 @@
+//! Utility functions.
+
 use aho_corasick::AhoCorasick;
 
 
+/// Replaces multiple occurences in the given byte slice.
+///
+/// This is more effient than calling `.replace` multiple times.
 pub fn replace_many<N, R>(src: &[u8], replacements: &[(N, R)]) -> Vec<u8>
 where
     N: AsRef<[u8]>,
@@ -16,6 +21,11 @@ where
     out.into()
 }
 
+/// Replaces multiple occurences in the given byte slice, with the replacement
+/// being defined by the given function.
+///
+/// This is more effient than calling `.replace` multiple times. This function
+/// is the more powerful version of [`replace_many`].
 pub fn replace_many_with<N, T, R>(src: &[u8], needles: N, mut f: R) -> Vec<u8>
 where
     N: IntoIterator<Item = T>,

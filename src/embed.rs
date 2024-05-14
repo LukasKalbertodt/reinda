@@ -5,17 +5,15 @@ use std::ops;
 use crate::DataSource;
 
 
-/// TODO
-pub use reinda_macros::embed;
-
-
-
+/// Collection of files embedded into the executable by [`embed!`][super::embed!].
 #[derive(Debug)]
 pub struct Embeds {
     #[doc(hidden)]
     pub entries: &'static [EmbeddedEntry],
 }
 
+/// Corresponds to one entry in the `files` array specified in
+/// [`embed!`][super::embed!], either a single file or a glob.
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum EmbeddedEntry {
@@ -28,6 +26,7 @@ pub enum EmbeddedEntry {
     Glob(EmbeddedGlob),
 }
 
+/// A glob entry embedded by [`embed!`][super::embed!].
 #[derive(Debug)]
 pub struct EmbeddedGlob {
     /// The glob pattern that was specified in the macro.
@@ -45,6 +44,7 @@ pub struct EmbeddedGlob {
     pub base_path: &'static str,
 }
 
+/// A single file embedded by [`embed!`][super::embed!].
 #[derive(Debug)]
 pub struct EmbeddedFile {
     #[doc(hidden)]
@@ -74,17 +74,18 @@ impl Embeds {
         self.entries.iter()
     }
 
-    /// Returns the entry with the specified path/pattern (the string specified
+    /// Returns the entry with the specified *embed pattern* (string specified
     /// in the macro). You can also use the index operator `EMBEDS["foo.txt"]`
     /// which works like this method, but panics if no entry with the specified
-    // path/pattern is found.
-    pub fn get(&self, path_pattern: &str) -> Option<&EmbeddedEntry> {
+    // *embed pattern* is found.
+    pub fn get(&self, embed_pattern: &str) -> Option<&EmbeddedEntry> {
         // Yes this is O(n), but building a better data structure as static data
         // is not trivial and it really doesn't matter in this case.
-        self.entries.iter().find(|entry| entry.path_pattern() == path_pattern)
+        self.entries.iter().find(|entry| entry.embed_pattern() == embed_pattern)
     }
 }
 
+/// See [`Embeds::get`].
 impl ops::Index<&str> for Embeds {
     type Output = EmbeddedEntry;
 
@@ -95,10 +96,11 @@ impl ops::Index<&str> for Embeds {
 }
 
 impl EmbeddedEntry {
-    /// Returns the path/pattern string specified in the macro for this entry.
-    /// That's either [`EmbeddedFile::path`] or[`EmbeddedGlob::pattern`],
-    /// depending on the type of this entry.
-    pub fn path_pattern(&self) -> &'static str {
+    /// Returns the *embed pattern*, which is the path or pattern string
+    /// specified in the macro for this entry. That's either
+    /// [`EmbeddedFile::path`] or [`EmbeddedGlob::pattern`], depending on the
+    /// type of this entry.
+    pub fn embed_pattern(&self) -> &'static str {
         match self {
             EmbeddedEntry::Single(f) => f.path(),
             EmbeddedEntry::Glob(g) => g.pattern(),

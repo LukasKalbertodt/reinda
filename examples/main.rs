@@ -34,7 +34,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     for entry in EMBEDS.entries() {
         println!(
             "'{}' -> {:?}",
-            entry.path_pattern(),
+            entry.embed_pattern(),
             entry.files().map(|f| f.path()).collect::<Vec<_>>(),
         );
     }

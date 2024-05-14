@@ -1,196 +1,131 @@
-//! This library helps with easily including and serving assets (like JS or CSS
-//! files) in your web application. It is fairly configurable and supports a
-//! variety of features. In particular, it can embed all assets into your
-//! executable at compile time to get an easy to deploy standalone-executable.
+//! This library helps with managing assets (like JS or CSS files) in your web
+//! application. It allows you to embed the files directly into your
+//! executable (for ease of deployment), optionally in compressed form.
+//! `reinda` can also insert a hash into filenames to facilitate powerful web
+//! caching. In development mode, all files are loaded dynamically, avoiding
+//! recompilation and thus reducing feedback cycles.
 //!
 //!
 //! # Quick start
 //!
-//! To use `reinda`, you mostly need to do three things: (1) define your assets
-//! with [`assets!`], (2) create an [`Assets`] instance, (3) call
-//! [`Assets::get`] to serve your asset.
+//! There are three main steps:
+//! 1. Use [`embed!`] to embed certain files into your binary.
+//! 2. Configure your assets via [`Builder`] and build [`Assets`].
+//! 3. Serve your assets via [`Assets::get`]
+//!
 //!
 //! ```ignore
-//! use reinda::{assets, Assets, Config, Setup};
+//! use reinda::Assets;
 //!
-//! const ASSETS: Setup = assets! {
+//! // Step 1: specify assets that you want to embed into the executable.
+//! const EMBEDS: reinda::Embeds = reinda::embed! {
 //!     // Folder which contains your assets, relative to your `Cargo.toml`.
-//!     #![base_path = "assets"]
+//!     base_path: "assets",
 //!
-//!     // List of assets to include, with different settings.
-//!     "index.html": { template },
-//!     "bundle.js": { hash },
+//!     // List files to embed. Supports glob patterns
+//!     files: [
+//!         "index.html",
+//!         "bundle.js",
+//!         "icons/*.svg",
+//!     ],
 //! };
 //!
 //!
 //! #[tokio::main]
-//! async fn main() -> Result<(), reinda::Error> {
-//!     // Initialize assets
-//!     let assets = Assets::new(ASSETS, Config::default()).await?;
+//! async fn main() -> Result<(), Box<dyn std::error::Error>> {
+//!     // Step 2: Configure your assets next. In this example, all embedded
+//!     // assets are just added, without any special configuration. Note though
+//!     // that the first argument, the HTTP path, can differ.
+//!     let mut builder = Assets::builder();
+//!     builder.add_embedded("index.html", &EMBEDS["index.html"]);
+//!     builder.add_embedded("static/main.js", &EMBEDS["bundle.js"]).with_hash();
+//!     builder.add_embedded("static/icons/", &EMBEDS["icons/*.svg"]);
 //!
-//!     // Retrieve specific asset. You can now send this data via HTTP or use
-//!     // it however you like.
-//!     let bytes /*: Option<bytes::Bytes> */ = assets.get("index.html").await?;
+//!     // You can also add assets not mentioned in `embed!` which are then
+//!     // always loaded at runtime.
+//!     builder.add_file("img/logo.svg", std::env::current_dir().unwrap().join("logo.svg"));
 //!
+//!     // Load & prepare all assets.
+//!     let assets = builder.build().await?;
+//!
+//!
+//!     // Step 3: serve assets (of course, this would be in an HTTP request handler).
+//!     let asset = assets.get("index.html").unwrap();
+//!     let bytes = asset.content().await?;
+//!
+//!     // ...
 //!     Ok(())
 //! }
 //! ```
 //!
-//! The `hash` keyword in the macro invocation means that `bundle.js` will be
-//! obtainable only with a filename that contains a hash of its content, e.g.
-//! `bundle.JdeK1YeQ90aJ.js`. This is useful for caching on the web: you can now
-//! serve the `bundle.js` with a very large `max-age` in the `cache-control`
-//! header. Whenever your asset changes, the URI changes as well, so the browser
-//! has to re-request it.
+//! For a longer and more practical example, see `examples/main.rs` in the
+//! repository.
 //!
-//! But how do you include the correct JS bundle path in your HTML file? That's
-//! what `template` is for. `reinda` supports very basic templating. If you
-//! define your HTML file like this:
+//! In practice, you likely want to use [`EntryBuilder::with_hash`] for most of
+//! your assets. And then use [`EntryBuilder::with_modifier`] and/or
+//! [`EntryBuilder::with_path_fixup`] to fix the references across files.
 //!
-//! ```text
-//! <html>
-//!   <head></head>
-//!   <body>
-//!     <script src="{{: path:bundle.js :}}" />
-//!   </body>
-//! </html>
-//! ```
+//! # Prod vs. dev mode
 //!
-//! Then the `{{: ... :}}` part will be replaced by the actual, hashed path of
-//! `bundle.js`. There are more uses for the template, as you can see below.
+//! Reinda operates in one of two modes: *prod* or *dev*. Prod mode is enabled
+//! if you are building in release mode (e.g. `cargo build --release`) or if
+//! you enabled the crate feature `always-prod`. Otherwise, dev mode is enabled.
 //!
-//! To learn more about this library, keep reading, or check out the docs for
-//! [`assets!`] for information on asset specification, or checkout [`Config`]
-//! for information about runtime configuration.
+//! The mode influences the behavior of reinda significantly. The following
+//! table describes those differences, though you likely don't need to worry
+//! about the details too much.
 //!
-//!
-//! # Embed or loaded at runtime: dev vs. prod mode
-//!
-//! This library has two different modes: **dev** (short for development) and
-//! **prod** (short for production). The name "prod" is deliberately not the
-//! same as "release" (the typical Rust term for it), because those two are not
-//! always the same.
-//!
-//! There are several differences between the two modes:
-//!
-//! |   | dev mode | prod mode |
-//! | - | -------- | --------- |
-//! | Normal assets | Loaded from filesystem when requested | Embedded into binary |
-//! | `dynamic: true` assets | Loaded from filesystem when requested | Loaded in [`Assets::new`] |
-//! | `hash: true` assets | Filename not modified | Hash inserted into filename |
-//! | Base path | `config.base_path` with current workdir as fallback | Given via `#![base_path]` |
+//! |                  | Prod               | Dev                   |
+//! | ---------------- | ------------------ | --------------------- |
+//! | **Summary**      | Embed assets & optimize for speed | Dynamically load assets for faster feedback cycles |
+//! | `embed!`         | Loads & embeds assets into executable | Only stores asset paths |
+//! | `with_hash`      | Hash inserted into filename | No hashes inserted |
+//! | `Builder::build` | Loads all assets, applies modifiers, calculates hashes | Does hardly anything, keeps storing paths |
+//! | `Assets::get`    | Hashmap lookup | Checks if path matches any assets or globs |
+//! | `Asset::content` | Just returns the already loaded `Bytes` | Loads file from file system, applies modifier |
 //!
 //!
-//! By default, if you compile in Cargo debug mode (e.g. `cargo build`), *dev*
-//! mode is used. If you compile in Cargo's release mode (e.g. `cargo build
-//! --release`), *prod* mode is used. You can instruct `reinda` to always use
-//! prod mode by enabling the feature `debug-is-prod`:
+//! # Glossary: kinds of paths
 //!
-//! ```text
-//! reinda = { version = "...", features = ["debug-is-prod"] }
-//! ```
+//! This library is dealing with different kind of paths, which could be
+//! confused for one another. Here are the terms these docs try to use:
 //!
-//!
-//! # Template
-//!
-//! `reinda` has a simple template system. The input file is checked for
-//! *fragments* which have the syntax `{{: foo :}}`. The start token is actually
-//! `{{: ` (note the whitespace!). So `{{:foo:}}` is not recognized as fragment.
-//! The syntax was chosen to not conflict with other template syntax that might
-//! be present in the asset files. Please let me know if some other template
-//! engine out there uses the `{{:` syntax! Then I might change the syntax of
-//! `reinda`.
-//!
-//! Inside a fragment, there are different replacement functions you can use:
-//!
-//! - **`include:`** allows you to include the content of another file in place
-//!   of the template fragment. If the included file is a template as well, that
-//!   will be rendered before being included. Example:
-//!   `{{: include:colors.css }}`.
-//!
-//! - **`path:`** replaces the fragment with the potential hashed path of
-//!   another asset. This only makes sense for hashed asset paths as otherwise
-//!   you could just insert the path directly. Example:
-//!   `{{: path:bundle.js :}}`.
-//!
-//! - **`var:`** replaces the fragment with a runtime provided variable. See
-//!   [`Config::variables`]. Example: `{{: var:main-color :}}`.
-//!
-//! Fragments have two other intended limitations: they must not contain a
-//! newline and must not be longer than 256 characters. This is to further
-//! prevent the template accidentally picking up start tokens that are not
-//! intended for `reinda`.
-//!
-//!
-//! ### Example
-//!
-//! **`index.html`**:
-//!
-//! ```text
-//! <html>
-//!   <head>
-//!     <script type="application/json">{ "accentColor": "{{: var:color :}}" }</script>
-//!     <style>{{: include:style.css :}}</style>
-//!   </head>
-//!   <body>
-//!     <script src="{{: path:bundle.js :}}" />
-//!   </body>
-//! </html>
-//! ```
-//!
-//! **`style.css`**
-//!
-//! ```text
-//! body {
-//!   margin: 0;
-//! }
-//! ```
-//!
-//! And assuming `bundle.js` was declared with `hash` (to hash its filename) and
-//! the `config.variables` contained the entry `"color": "blue"`, then the
-//! resulting `index.html` looks like this:
-//!
-//! ```text
-//! <html>
-//!   <head>
-//!     <script type="application/json">{ "accentColor": "blue" }</script>
-//!     <style>body {
-//!   margin: 0;
-//! }</style>
-//!   </head>
-//!   <body>
-//!     <script src="bundle.JdeK1YeQ90aJ.js" />
-//!   </body>
-//! </html>
-//! ```
+//! - *FS path*: a proper path referring to one file on the file system.
+//! - *Embed pattern*: what you specify in `files` inside `embed!`: could either
+//!    be an FS path (referring to a single file) or contain a glob that
+//!    matches any number of files.
+//! - *HTTP path*: the path under which assets are reachable.
+//!   - *unhashed HTTP path*: HTTP path before hashes are inserted. This is what
+//!      you specify in all `Builder::add_*` methods.
+//!   - *hashed HTTP path*: HTTP path after inserting hashes (if configured).
+//!      This is what you pass to [`Assets::get`] and get inside
+//!      [`Assets::iter`]. Even for assets without a hashed filename, the same
+//!      term is used for consistency. Meaning: for non-hashed assets or in dev
+//!      mode, the hashed and unhashed HTTP path is exactly the same.
 //!
 //!
 //! # Cargo features
 //!
 //! - **`compress`** (enabled by default): if enabled, embedded files are
 //!   compressed. This often noticably reduces the binary size of the
-//!   executable. This feature adds the `flate2` dependency.
+//!   executable. This feature adds the `brotli` dependency.
 //!
 //! - **`hash`** (enabled by default): is required for support of filename
 //!   hashing (see above). This feature adds the `base64` and `sha2`
 //!   dependencies.
 //!
-//! - **`debug-is-prod`**: see the section about "prod" and "dev" mode above.
+//! - **`always-prod`**: enabled *prod* mode even when compiled in debug mode.
+//!   See the section about "prod" and "dev" mode above.
 //!
 //!
 //! # Notes, Requirements and Limitations
 //!
-//! - `reinda` actually consists of three crates: `reinda-core`, `reinda-macros`
-//!   and the main crate. To detect whether Cargo compiles in debug or release
-//!   mode, `cfg(debug_assertions)` is used. All three of these crates have to
-//!   be compiled with with the same setting regarding debug assertions,
-//!   otherwise you will either see strange compile errors or strange runtime
-//!   behavior (no UB though). This shouldn't be a concern, as all crates in
-//!   your dependency graph are compiled with the same codegen settings, unless
-//!   you include per-dependency overrides in your `Cargo.toml`. So just don't
-//!   do that.
+//! - `reinda` consists of two crates: `reinda-macros` and the main crate. Both
+//!   crates have to be compiled with the same dev/prod mode. Cargo does this
+//!   correctly by default, so don't worry about this unless you add
+//!   per-dependency overrides.
 //! - The environment variable `CARGO_MANIFEST_DIR` has to be set when expanding
-//!   the `assets!` macro. Cargo does this automatically. But if you, for some
+//!   the `embed!` macro. Cargo does this automatically. But if you, for some
 //!   reason, compile manually with `rustc`, you have to set that value.
 
 #![deny(missing_debug_implementations)]
@@ -215,43 +150,106 @@ mod imp;
 
 pub use self::{
     builder::{Builder, EntryBuilder},
-    embed::{EmbeddedEntry, EmbeddedFile, EmbeddedGlob, Embeds, embed},
+    embed::{EmbeddedEntry, EmbeddedFile, EmbeddedGlob, Embeds},
 };
 
 
-/// A collection of assets, defined as a map from HTTP path to asset. Basically
+
+/// Embeds files into the executable.
+///
+/// The syntax of this macro is similar to the struct initialization syntax:
+///
+/// ```ignore
+/// const EMBEDS: reinda::Embeds = reinda::embed! {
+///     base_path: "../frontend/build",
+///     files: ["foo.txt", "bar.js", "icons/*.svg"],
+/// };
+/// ```
+///
+/// The following fields can be specified, with only `files` being mandatory:
+///
+/// - **`files`** (array of strings): list of paths or patterns of files that
+///   should be embedded.
+///
+/// - **`base_path`** (string): a base path that is prefixed to all values in
+///   `files`. Relative to `Cargo.toml`. Empty if unspecified. For a path `path`
+///   in `files`, the following file is loaded:
+///   `${CARGO_MANIFEST_DIR}/${base_dir}/${path}`.
+///
+/// - **`print_stats`** (bool): if set to true, reinda will print stats about
+///   embedded files at compile time. Default: `false`.
+///
+/// - **`compression_threshold`** (float): number between 0 and 1 that
+///   determines how well a file need to be compressible for it to be stored
+///   in compressed form. A value of 0.7 would mean that a file is stored in
+///   compressed form if that form is at most 70% as large as the original
+///   file. There is a balance to strike: compression obviously reduces the
+///   binary size, but also means that it has to be decompressed and that the
+///   compressed and decompressed version will be in memory. Default: `0.85`.
+///
+/// - **`compression_quality`** (int): sets the Brotli compression quality (from
+///   1 to 11). Default: `9`.
+///
+/// For compression to be used at all, the `compress` feature needs to be
+/// enabled.
+///
+/// All entries in `files` falls in one of two categories. Either it's a plain
+/// path without any (non-escaped) glob meta characters (`*?[]`), then the
+/// resulting entry will be [`EmbeddedFile`]. Otherwise, if it contains glob
+/// characters, it results in an [`EmbeddedGlob`]. Glob characters can be
+/// escaped by surrounding them with `[]`, e.g. `a[*]-algorithm.txt`. For more
+/// information on the supported glob patterns, see [the `glob` docs][glob].
+///
+///
+/// [glob]: https://docs.rs/glob/latest/glob/struct.Pattern.html
+pub use reinda_macros::embed;
+
+/// Collection of assets, mapping from *hashed HTTP paths* to assets. Basically
 /// a virtual file system.
 ///
-/// TODO: explain more
+/// This is the main type that you likely want to build once and then store for
+/// the duration of your backend web application. In prod mode, this is
+/// optimized to make serving assets as fast as possible. It's essentially a
+/// `HashMap<String, Bytes>` in that case, with all file modifications already
+/// applied.
+///
+/// You create an instance of this by using [`Self::builder`] and eventually
+/// call [`Builder::build`].
 #[derive(Debug, Clone)]
 pub struct Assets(imp::AssetsInner);
 
 impl Assets {
+    /// Returns a builder, allowing you to add and configure assets.
     pub fn builder<'a>() -> Builder<'a> {
         Builder { assets: vec![] }
     }
 
+    /// Retrieves an asset by *hashed HTTP path*. In prod mode, this is just a
+    /// fast hash map lookup. In dev mode, the asset is loaded from the file
+    /// system.
     pub fn get(&self, http_path: &str) -> Option<Asset> {
         self.0.get(http_path)
     }
 
     /// Returns the number of assets. For glob patterns, see [`Self::iter`] for
-    /// details. This method always returns the same number as `self.iter
-    /// ().count()` (only faster).
+    /// details. This method always returns the same number as
+    /// `self.iter().count()` (but faster).
     pub fn len(&self) -> usize {
         self.0.len()
     }
 
-    /// Returns an iterator over all assets. *Note*: for assets included via
-    /// glob pattern, this iterator only returns those found at compile time.
-    /// This does *not* perform a glob walk over directories.
+    /// Returns an iterator over all assets and their *hashed HTTP paths*.
+    ///
+    /// *Note*: for assets included via glob pattern, this iterator only returns
+    ///  those found at compile time. This does *not* perform a glob walk over
+    ///  directories.
     pub fn iter(&self) -> impl '_ + Iterator<Item = (&str, Asset)> {
         self.0.iter()
     }
 }
 
 
-/// An asset.
+/// An fully prepared asset.
 ///
 /// Very cheap to clone (in prod mode anyway, which is the only thing that
 /// matters).
@@ -261,17 +259,22 @@ pub struct Asset(imp::AssetInner);
 impl Asset {
     /// Returns the contents of this asset. Will be loaded from the file system
     /// in dev mode, potentially returning IO errors. In prod mode, the file
-    /// contents are already loaded and this method always returns `Ok(_)`.
+    /// contents are already loaded and this method always returns `Ok(_)` and
+    /// never yield.
     pub async fn content(&self) -> Result<Bytes, io::Error> {
         self.0.content().await
     }
 
+    /// Returns whether this asset's filename contains a hash. Specifically, it
+    /// returns true iff [`EntryBuilder::with_hash`] was called *and* you are
+    /// compiling in prod mode.
     pub fn is_filename_hashed(&self) -> bool {
         self.0.is_filename_hashed()
     }
 }
 
-
+/// Passed to the modifier closure, e.g. allowing you to resolve *unhashed HTTP
+/// paths* to *hashed ones*.
 #[derive(Debug)]
 pub struct ModifierContext<'a> {
     declared_deps: &'a [Cow<'static, str>],
@@ -279,11 +282,10 @@ pub struct ModifierContext<'a> {
 }
 
 impl<'a> ModifierContext<'a> {
-    /// Resolves to the actual asset HTTP path, including hash if configured
-    /// that way.
+    /// Resolves an *unhashed HTTP path* to the *hashed HTTP path*.
     ///
     /// **Panics** if the passed `unhashed_http_path` was not declared as
-    /// dependency in `with_modifier` and refers to an existing asset.
+    /// dependency in `with_modifier` or does not refer to an existing asset.
     pub fn resolve_path<'b>(&'b self, unhashed_http_path: &'b str) -> &'b str {
         if !self.declared_deps.iter().any(|dep| dep == unhashed_http_path) {
             panic!(
@@ -302,6 +304,9 @@ impl<'a> ModifierContext<'a> {
         })
     }
 
+    /// Returns the dependencies you passed to [`EntryBuilder::with_modifier`],
+    /// in the same order. This is just for convenience and to avoid cloning
+    /// the dependency list.
     pub fn dependencies(&self) -> &'a [Cow<'static, str>] {
         self.declared_deps
     }
@@ -311,6 +316,7 @@ impl<'a> ModifierContext<'a> {
 // ===== Error
 // =========================================================================================
 
+/// Errors that might happen during [`Builder::build`], when loading and resolving files.
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum BuildError {
