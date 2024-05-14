@@ -149,6 +149,35 @@ impl<'a> EntryBuilder<'a> {
         };
         self
     }
+
+    /// Returns all (unhashed) HTTP paths that are mounted by this entry. This
+    /// is mainly useful to pass as dependencies to [`Self::with_modifier`] or
+    /// [`Self::with_path_fixup`] of another entry.
+    pub fn http_paths(&self) -> Vec<Cow<'a, str>> {
+        match &self.kind {
+            EntryBuilderKind::Single { http_path, .. } => {
+                vec![http_path.clone()]
+            }
+            EntryBuilderKind::Glob { http_prefix, files, .. } => {
+                files.iter().map(|f| f.http_path(http_prefix).into()).collect()
+            }
+        }
+    }
+
+    /// Like [`Self::http_paths`] but asserting that there is only one path
+    /// added by this entry. If that's not the case, `None` is returned.
+    pub fn single_http_path(&self) -> Option<Cow<'a, str>> {
+        match &self.kind {
+            EntryBuilderKind::Single { http_path, .. } => Some(http_path.clone()),
+            EntryBuilderKind::Glob { http_prefix, files, .. } => {
+                if files.len() == 1 {
+                    Some(files[0].http_path(http_prefix).into())
+                } else {
+                    None
+                }
+            },
+        }
+    }
 }
 
 impl GlobFile {
