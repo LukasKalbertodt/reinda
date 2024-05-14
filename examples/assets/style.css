@@ -7,6 +7,27 @@ body {
     background-color: lightblue;
 }
 
-div::after {
-    content: "{{: var:should_not_be_replaced :}}";
+@font-face {
+    font-family: 'Open Sans';
+    font-style: italic;
+    font-weight: 400;
+    src: url(static/font/open-sans/latin-i400.woff2) format('woff2');
+}
+@font-face {
+    font-family: 'Open Sans';
+    font-style: italic;
+    font-weight: 700;
+    src: url(static/font/open-sans/latin-i700.woff2) format('woff2');
+}
+@font-face {
+    font-family: 'Open Sans';
+    font-style: normal;
+    font-weight: 400;
+    src: url(static/font/open-sans/latin-400.woff2) format('woff2');
+}
+@font-face {
+    font-family: 'Open Sans';
+    font-style: normal;
+    font-weight: 700;
+    src: url(static/font/open-sans/latin-700.woff2) format('woff2');
 }
