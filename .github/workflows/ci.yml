@@ -10,56 +10,23 @@ env:
   RUSTFLAGS: --deny warnings
 
 jobs:
-  check-debug-dev:
-    name: 'Build & test (debug, dev mode)'
-    runs-on: ubuntu-20.04
+  main:
+    strategy:
+      matrix:
+        mode:
+          - ''
+          - '--features=always-prod'
+          - '--release'
+        features:
+          - '--no-default-features'
+          - '--no-default-features --features=hash'
+          - '--no-default-features --features=compress'
+          - '--no-default-features --features=hash,compress'
+
+    runs-on: ubuntu-22.04
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
     - name: Build
-      run: cargo build
-    - name: Run tests
-      run: |
-        cargo test -p reinda-core
-        cargo test -p reinda-macros
-        cargo test
-
-
-  check-debug-prod:
-    name: 'Build & test (debug, prod mode -- `debug-is-prod`)'
-    runs-on: ubuntu-20.04
-    steps:
-    - uses: actions/checkout@v2
-    - name: Build
-      run: cargo build --features=debug-is-prod
-    - name: Run tests
-      run: |
-        cargo test -p reinda-core --features=debug-is-prod
-        cargo test -p reinda-macros --features=debug-is-prod
-        cargo test --features=debug-is-prod
-
-
-  check-release:
-    name: 'Build & test (release, prod mode)'
-    runs-on: ubuntu-20.04
-    steps:
-    - uses: actions/checkout@v2
-    - name: Build
-      run: cargo build --release
-    - name: Run tests
-      run: |
-        cargo test -p reinda-core --release
-        cargo test -p reinda-macros --release
-        cargo test --release
-
-  check-debug-prod-no-hash:
-    name: 'Build & test (debug, prod mode, no hashing)'
-    runs-on: ubuntu-20.04
-    steps:
-    - uses: actions/checkout@v2
-    - name: Build
-      run: cargo build --no-default-features --features=debug-is-prod
-    - name: Run tests
-      run: |
-        cargo test -p reinda-core --no-default-features --features=debug-is-prod
-        cargo test -p reinda-macros --no-default-features --features=debug-is-prod
-        cargo test --no-default-features --features=debug-is-prod
+      run: cargo build ${{ matrix.mode }} ${{ matrix.features }}
+    - name: Test
+      run: cargo test ${{ matrix.mode }} ${{ matrix.features }}
