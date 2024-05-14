@@ -16,7 +16,7 @@ impl Input {
     pub(crate) fn with_defaults(self) -> EmbedConfig {
         EmbedConfig {
             base_path: self.base_path,
-            compression_threshold: self.compression_threshold.unwrap_or(0.9),
+            compression_threshold: self.compression_threshold.unwrap_or(0.85),
             compression_quality: self.compression_quality.unwrap_or(9),
             print_stats: self.print_stats.unwrap_or(false),
             files: self.files,
