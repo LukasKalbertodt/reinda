@@ -53,8 +53,14 @@ impl AssetsInner {
         let mut dep_graph = DepGraph::new();
         for (unhashed_http_path, asset) in &unresolved {
             dep_graph.add_asset(&unhashed_http_path);
-            if let Modifier::Custom { deps, .. } = &asset.modifier {
+            if let Some(deps) = asset.modifier.dependencies() {
                 for dep in deps {
+                    if !unresolved.contains_key(dep.as_ref()) {
+                        panic!(
+                            "Asset '{}' specified dependency '{}' but that asset does not exist",
+                            unhashed_http_path, dep,
+                        );
+                    }
                     dep_graph.add_dependency(&unhashed_http_path, &dep);
                 }
             }

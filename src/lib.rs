@@ -379,6 +379,17 @@ enum Modifier {
     },
 }
 
+impl Modifier {
+    #[cfg(prod_mode)]
+    fn dependencies(&self) -> Option<&[Cow<'static, str>]> {
+        match self {
+            Modifier::None => None,
+            Modifier::PathFixup(deps) => Some(deps),
+            Modifier::Custom { deps, .. } => Some(deps),
+        }
+    }
+}
+
 impl std::fmt::Debug for Modifier {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
