@@ -88,8 +88,8 @@ impl AssetsInner {
         self.0.assets.len()
     }
 
-    pub(crate) fn iter(&self) -> impl '_ + Iterator<Item = Asset> {
-        self.0.assets.keys().flat_map(move |key| self.get(key))
+    pub(crate) fn iter(&self) -> impl '_ + Iterator<Item = (&str, Asset)> {
+        self.0.assets.keys().flat_map(move |key| self.get(key).map(|a| (&**key, a)))
     }
 }
 

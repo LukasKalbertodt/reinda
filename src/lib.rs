@@ -245,7 +245,7 @@ impl Assets {
     /// Returns an iterator over all assets. *Note*: for assets included via
     /// glob pattern, this iterator only returns those found at compile time.
     /// This does *not* perform a glob walk over directories.
-    pub fn iter(&self) -> impl '_ + Iterator<Item = Asset> {
+    pub fn iter(&self) -> impl '_ + Iterator<Item = (&str, Asset)> {
         self.0.iter()
     }
 }

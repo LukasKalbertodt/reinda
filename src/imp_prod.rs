@@ -112,8 +112,8 @@ impl AssetsInner {
         self.assets.len()
     }
 
-    pub(crate) fn iter(&self) -> impl '_ + Iterator<Item = Asset> {
-        self.assets.values().cloned()
+    pub(crate) fn iter(&self) -> impl '_ + Iterator<Item = (&str, Asset)> {
+        self.assets.iter().map(|(k, v)| (&**k, v.clone()))
     }
 }
 
