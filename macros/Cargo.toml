@@ -24,7 +24,7 @@ brotli = { version = "5", optional = true }
 glob = "0.3.1"
 proc-macro2 = "1"
 quote = "1"
-litrs = "0.4.1"
+litrs = { version = "1.0.0", features = ["proc-macro2"] }
 
 [build-dependencies]
 cfg_aliases = "0.2.0"

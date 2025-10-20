@@ -98,7 +98,7 @@ fn eat_comma_sep(it: &mut ParseIter) -> Result<(), Error> {
 }
 
 fn parse_string_lit(it: &mut ParseIter) -> Result<String, Error> {
-    parse_lit::<litrs::StringLit<String>>(it).map(|l| l.into_value().into_owned())
+    parse_lit::<litrs::StringLit<String>>(it).map(|l| l.into_value())
 }
 
 fn parse_lit<T>(it: &mut ParseIter) -> Result<T, Error>
