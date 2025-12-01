@@ -59,6 +59,10 @@ pub(crate) fn emit(input: Input) -> Result<TokenStream, Error> {
                 for entry in glob_walker {
                     let file_path = entry
                         .map_err(|e| err!(@span, "IO error while walking glob paths: {e}"))?;
+                    // skip directories
+                    if file_path.is_dir() {
+                        continue;
+                    }
                     let short_path = file_path.strip_prefix(&base)
                         .unwrap_or(&file_path)
                         .to_str()

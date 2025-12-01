@@ -1,9 +1,15 @@
-use std::{borrow::Cow, path::PathBuf, sync::Arc};
+use std::{
+    borrow::Cow,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use bytes::Bytes;
 
-use crate::{Assets, BuildError, DataSource, EmbeddedEntry, EmbeddedFile, EmbeddedGlob, Modifier, ModifierContext, PathHash, SplitGlob};
-
+use crate::{
+    Assets, BuildError, DataSource, EmbeddedEntry, EmbeddedFile, EmbeddedGlob, Modifier,
+    ModifierContext, PathHash, SplitGlob,
+};
 
 /// Helper to build [`Assets`].
 #[derive(Debug)]
@@ -34,7 +40,7 @@ pub(crate) enum EntryBuilderKind<'a> {
         files: Vec<GlobFile>,
         #[cfg(dev_mode)]
         base_path: &'static str,
-    }
+    },
 }
 
 #[derive(Debug)]
@@ -122,12 +128,21 @@ impl<'a> Builder<'a> {
         self.assets.push(EntryBuilder {
             kind: EntryBuilderKind::Glob {
                 http_prefix: http_path.into(),
-                files: glob.files.iter().map(|f| GlobFile {
-                    // This should never be `None`
-                    suffix: f.path.strip_prefix(&split_glob.prefix)
-                        .expect("embedded file path does not start with glob prefix"),
-                    source: f.data_source(),
-                }).collect(),
+                files: glob
+                    .files
+                    .iter()
+                    .map(|f| {
+                        GlobFile {
+                            // This should never be `None`
+                            suffix: Path::new(f.path)
+                                .strip_prefix(split_glob.prefix)
+                                .expect("embedded file path does not start with glob prefix")
+                                .to_str()
+                                .expect("embedded file path contains invalid UTF-8 characters"),
+                            source: f.data_source(),
+                        }
+                    })
+                    .collect(),
                 glob: split_glob,
                 #[cfg(dev_mode)]
                 base_path: glob.base_path,
@@ -219,9 +234,12 @@ impl<'a> EntryBuilder<'a> {
             EntryBuilderKind::Single { http_path, .. } => {
                 vec![http_path.clone()]
             }
-            EntryBuilderKind::Glob { http_prefix, files, .. } => {
-                files.iter().map(|f| f.http_path(http_prefix).into()).collect()
-            }
+            EntryBuilderKind::Glob {
+                http_prefix, files, ..
+            } => files
+                .iter()
+                .map(|f| f.http_path(http_prefix).into())
+                .collect(),
         }
     }
 
@@ -230,19 +248,24 @@ impl<'a> EntryBuilder<'a> {
     pub fn single_http_path(&self) -> Option<Cow<'a, str>> {
         match &self.kind {
             EntryBuilderKind::Single { http_path, .. } => Some(http_path.clone()),
-            EntryBuilderKind::Glob { http_prefix, files, .. } => {
+            EntryBuilderKind::Glob {
+                http_prefix, files, ..
+            } => {
                 if files.len() == 1 {
                     Some(files[0].http_path(http_prefix).into())
                 } else {
                     None
                 }
-            },
+            }
         }
     }
 }
 
 impl GlobFile {
     pub(crate) fn http_path(&self, http_prefix: &str) -> String {
-        format!("{http_prefix}{}", self.suffix)
+        // suffix is split from EmbeddedFile::path
+        // we trust it should be a valid path string
+        // so we only need to replace the backslashes with slashes
+        format!("{http_prefix}{}", self.suffix.replace('\\', "/"))
     }
 }
